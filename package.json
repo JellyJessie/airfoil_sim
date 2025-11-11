@@ -1,0 +1,21 @@
+{
+  "name": "airfoilsim",
+  "version": "1.0.0",
+  "main": "FoilSimStudent_Calc.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.21"
+  }
+}

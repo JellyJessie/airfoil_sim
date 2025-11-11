@@ -1,0 +1,10 @@
+{
+  "folders": [
+    {
+      "path": "/mnt/data/airfoil_sim"
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true
+  }
+}
