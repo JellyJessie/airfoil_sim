@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "FoilSimStudent_Calc.js",
   "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
