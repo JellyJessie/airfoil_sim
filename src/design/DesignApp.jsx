@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useFoilSim } from "../store/FoilSimContext"; // <– ADD THIS
 
 function deg2rad(d) {
   return (d * Math.PI) / 180;
@@ -76,11 +77,19 @@ function asPath(pts) {
 }
 
 export default function DesignApp() {
+  // ⬇️ NEW: pull angleDeg from the FoilSim context
+  const {
+    state: { angleDeg },
+    dispatch,
+  } = useFoilSim();
+
   const [chord, setChord] = useState(1.0);
   const [t, setT] = useState(0.12);
   const [m, setM] = useState(0.02);
   const [p, setP] = useState(0.4);
-  const [alpha, setAlpha] = useState(4);
+  // const [alpha, setAlpha] = useState(4);
+  // just treat angleDeg as the design angle:
+  const alpha = angleDeg;
 
   const pts = useMemo(
     () => naca4({ m, p, t, c: chord, n: 300, alpha }),
@@ -115,11 +124,12 @@ export default function DesignApp() {
   }
 
   function reset() {
-    setChord(1.0);
-    setT(0.12);
     setM(0.02);
     setP(0.4);
-    setAlpha(4);
+    setT(0.12);
+    setChord(1.0);
+    // also reset angle in the global state if you like: setAlpha(4);
+    dispatch({ type: "SET_INPUT", key: "angleDeg", value: 4 });
   }
 
   return (

@@ -1,5 +1,4 @@
 // src/core/shape.js
-import { ENVIRONMENT } from "./constants.js";
 import { velocityConv, lengthConv, forceConv } from "./units.js";
 import { getAtmosphere } from "./environment.js";
 

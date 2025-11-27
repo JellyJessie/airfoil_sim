@@ -1,6 +1,5 @@
 // src/core/airfoil.js
 import { Shape } from "./shape.js";
-import { ENVIRONMENT } from "./constants.js";
 
 export class Airfoil extends Shape {
   constructor(params, options = {}) {

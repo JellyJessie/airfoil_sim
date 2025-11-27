@@ -3,7 +3,7 @@
 export default function ControlsPanel({ onModeChange }) {
   return (
     <div className="box2">
-      <label style={{ color: "red" }}>FoilSim JS</label>
+      <label style={{ color: "red" }}>AirfoilSim</label>
 
       <div className="unitsdropdown">
         <button onClick={() => onModeChange("units")}>Units ▼</button>

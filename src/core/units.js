@@ -1,5 +1,5 @@
 // src/core/units.js
-import { UNITS } from "./constants.js";
+import { UNITS } from "../physics/shapeCore.js";
 
 export function velocityConv(units) {
   if (units === UNITS.ENGLISH) return 0.6818;

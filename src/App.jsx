@@ -11,8 +11,10 @@ import QuickControls from "./components/QuickControls.jsx";
  * Simple angle-of-attack slider using FoilSim context
  */
 function AngleControl() {
-  const { state, dispatch } = useFoilSim();
-  const { angleDeg } = state;
+  const {
+    state: { angleDeg },
+    dispatch,
+  } = useFoilSim();
 
   const handleChange = (e) => {
     const value = Number(e.target.value);
@@ -72,7 +74,7 @@ function FoilSimPanel() {
         maxWidth: 420,
       }}
     >
-      <h2 style={{ marginTop: 0 }}>FoilSim Core Panel</h2>
+      <h2 style={{ marginTop: 0 }}>AirfoilSim Panel</h2>
 
       <section style={{ marginBottom: "0.75rem" }}>
         <label>
