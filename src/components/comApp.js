@@ -5,7 +5,7 @@ import Canvas from "./components/Canvas";
 import FoilPlot from "./components/FoilPlot";
 import { calculateLiftCoefficient } from "./physics/shapeCore.js";
 
-function App() {
+function comApp() {
   const [lift, setLift] = useState(0);
   const [plotData, setPlotData] = useState({ x: [], y: [] });
 
@@ -23,7 +23,7 @@ function App() {
 
   return (
     <div className="App">
-      <h1>AirFoil Design Simulation</h1>
+      <h1>FoilSim Student</h1>
       <Button label="Calculate Lift" onClick={handleCalculate} />
       <p>Lift Coefficient: {lift}</p>
       <Canvas />
@@ -32,4 +32,4 @@ function App() {
   );
 }
 
-export default App;
+export default comApp;

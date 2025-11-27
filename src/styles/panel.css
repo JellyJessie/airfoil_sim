@@ -1,18 +1,61 @@
 .af-panel {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
   border: 1px solid #ddd;
   border-radius: 12px;
   padding: 12px;
   margin: 12px 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   background: #fff;
 }
-.af-title { margin: 0 0 8px 0; font-size: 1.1rem; }
-.af-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
-.af-grid button { padding: 8px 10px; border-radius: 8px; border: 1px solid #ccc; background: #f7f7f7; cursor: pointer; }
-.af-grid button:hover { background:#eee; }
-.af-field { display:flex; flex-direction:column; margin-bottom:10px; }
-.af-field > label { font-weight:600; margin-bottom:4px; }
-.af-field > input[type="number"] { padding:8px 10px; border:1px solid #ccc; border-radius:8px; }
-button { padding:8px 10px; border-radius:8px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; }
-button:hover { background:#eee; }
+
+.af-title {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+}
+.af-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.af-grid button {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+  cursor: pointer;
+}
+.af-grid button:hover {
+  background: #eee;
+}
+.af-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+}
+.af-field > label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.af-field > input[type="number"] {
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+button {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+  cursor: pointer;
+}
+button:hover {
+  background: #eee;
+}

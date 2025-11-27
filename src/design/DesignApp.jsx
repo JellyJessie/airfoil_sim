@@ -124,7 +124,7 @@ export default function DesignApp() {
 
   return (
     <div className="af-panel" style={{ maxWidth: 1000 }}>
-      <h2 className="af-title">Airfoil Design (NACA 4-digit)</h2>
+      <h2 className="af-title">Airfoil Design (NACA MPXX)</h2>
       <div
         style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 16 }}
       >
