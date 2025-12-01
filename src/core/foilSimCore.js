@@ -1,6 +1,6 @@
 // src/core/foilSimCore.js
-
-import { Airfoil, UnitSystem, Environment } from "../physics/shapeCore.js";
+import { Airfoil } from "../core/shape.js";
+import { UnitSystem, Environment } from "../physics/shapeCore.js";
 
 // Map whatever FoilSimContext gives us to our Environment enum
 function normalizeEnvironment(env) {

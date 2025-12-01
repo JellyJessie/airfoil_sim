@@ -1,6 +1,5 @@
 // src/core/environment.js
-import { ENVIRONMENT } from "../physics/shapeCore.js";
-import { lengthConv, velocityConv } from "../physics/shapeCore.js";
+import { Environment, lengthConv, velocityConv } from "../physics/shapeCore.js";
 
 const MU0_AIR = 0.000000362;
 const MU0_WATER = 0.0000272;
@@ -47,7 +46,7 @@ export function getAtmosphere({
   const vconv = velocityConv(units);
 
   switch (environment) {
-    case ENVIRONMENT.EARTH: {
+    case Environment.EARTH: {
       const ts0 = tempEarth_F(hite); // actually Rankine in original Shape
       const tempF = ts0 - 459.6;
       const rlhum = 0.0; // original student app uses 0 unless water env :contentReference[oaicite:3]{index=3}
@@ -68,7 +67,7 @@ export function getAtmosphere({
       };
     }
 
-    case ENVIRONMENT.MARS: {
+    case Environment.MARS: {
       const rgas = 1149;
       let ts0;
       if (hite <= 22960) ts0 = 434.02 - 0.548 * (hite / 1000.0);
@@ -82,7 +81,7 @@ export function getAtmosphere({
       return { rho, mu, ps0, q0Factor: q0, ts0 };
     }
 
-    case ENVIRONMENT.MERCURY: {
+    case Environment.MERCURY: {
       // depth is negative altitude / lconv in original code :contentReference[oaicite:5]{index=5}
       const hite = -altitude / lconv;
       const rho = 1.94; // slug/ft^3
@@ -94,7 +93,7 @@ export function getAtmosphere({
       return { rho, mu, ps0, q0Factor: q0, ts0 };
     }
 
-    case ENVIRONMENT.VENUS: {
+    case Environment.VENUS: {
       const ts0 = 1331.6;
       const ps0 = 194672.0;
       const rgas = 1149;

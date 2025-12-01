@@ -1,12 +1,15 @@
 // src/App.jsx
 import React, { useState } from "react";
-import { FoilSimProvider, useFoilSim } from "./store/FoilSimContext";
-import { UnitSystem, Environment } from "./physics/shapeCore";
+import { FoilSimProvider, useFoilSim } from "./store/FoilSimContext.jsx";
+import { UnitSystem, Environment } from "./physics/shapeCore.js";
 
 import DesignApp from "./design/DesignApp.jsx";
 import Design3D from "./design/Design3D.jsx";
 import QuickControls from "./components/QuickControls.jsx";
-
+import { OutputTabs } from "./foilsim/OutputTabs.jsx";
+import PlotButtons from "./components/PlotButtons.jsx";
+import PlotControls from "./foilsim/PlotControls.jsx";
+import AnalysisPanel from "./components/AnalysisPanel.jsx";
 /**
  * Simple angle-of-attack slider using FoilSim context
  */
@@ -34,7 +37,6 @@ function AngleControl() {
         step={0.5}
         value={angleDeg}
         onChange={handleChange}
-        style={{ width: "300px" }}
       />
     </div>
   );
@@ -49,6 +51,7 @@ function AngleControl() {
 function FoilSimPanel() {
   const { state, derivedShape, dispatch } = useFoilSim();
   const { units, environment, velocity, chord, altitude } = state;
+  const { outputButton, shapeSelect } = state;
   const reynolds = derivedShape?.reynolds ?? 0;
 
   const handleUnitsChange = (e) => {
@@ -74,7 +77,7 @@ function FoilSimPanel() {
         maxWidth: 420,
       }}
     >
-      <h2 style={{ marginTop: 0 }}>AirfoilSim Panel</h2>
+      <h2 style={{ marginTop: 0 }}>Airfoil Sim Panel</h2>
 
       <section style={{ marginBottom: "0.75rem" }}>
         <label>
@@ -136,6 +139,38 @@ function FoilSimPanel() {
         <strong>Reynolds number: </strong>
         {Number.isFinite(reynolds) ? reynolds.toExponential(3) : "—"}
       </section>
+
+      {/*
+      <section style={{ marginTop: "1rem" }}>
+        <h2>Plot selection</h2>
+        <PlotButtons visible={true} />
+      </section>
+
+      <PlotControls />
+      */}
+      <section>
+        <OutputTabs />
+
+        {outputButton === 4 && (
+          <>
+            {/*<div style={{ marginTop: "0.5rem", fontWeight: 600 }}>
+              Select Plot
+            </div>*/}
+            <div>Surface:</div>
+
+            {/* always show surface choices */}
+            {/* Pressure / Velocity / Drag could be similar to PlotControls row */}
+
+            {shapeSelect <= 3 && (
+              <>
+                {/*<PlotControls />{" "} */}
+                {/* Speed / Altitude / Wing / Density row we wrote */}
+                {/* Later: add Angle / Camber / Thickness row */}
+              </>
+            )}
+          </>
+        )}
+      </section>
     </div>
   );
 }
@@ -154,12 +189,14 @@ function AppInner() {
         <button onClick={() => setTab("design")}>Airfoil Design (NACA)</button>
         <button onClick={() => setTab("three")}>3D View</button>
         <button onClick={() => setTab("quick")}>Quick Controls</button>
+        <button onClick={() => setTab("analysis")}>Analysis</button>
       </div>
 
       {/* TAB CONTENT */}
       {tab === "design" && <DesignApp />}
       {tab === "three" && <Design3D />}
       {tab === "quick" && <QuickControls />}
+      {tab === "analysis" && <AnalysisPanel />}
 
       {/* Spacer */}
       <hr style={{ margin: "16px 0" }} />

@@ -1,7 +1,9 @@
 // src/store/FoilSimContext.jsx
 import React, { createContext, useContext, useReducer, useMemo } from "react";
-import { Shape, UnitSystem, Environment } from "../physics/shapeCore";
+import { UnitSystem, Environment } from "../physics/shapeCore";
+import { Shape } from "../core/shape.js";
 import { computeAirfoil } from "../core/foilSimCore";
+import { computeOutputs } from "../foilsim/computeOutputs";
 
 const FoilSimContext = createContext(null);
 
@@ -16,12 +18,41 @@ const initialState = {
   wingArea: 4.0,
   units: UnitSystem.METRIC,
   environment: Environment.EARTH,
+  plot: 8, // 8 = Speed, 9 = Altitude, 10 = Wing Area, 11 = Density
+  outputButton: 1, // 1=gauge, 2=geometry, 3=data, 4=plot (if you want)
+  inputButton: 2, // if you still care about Shape/Flight/Analysis/etc
+  selectClicked: 0,
+  shapeSelect: 1, // 1=Joukowski, 2=Ellipse, 3=Plate, 4=Cylinder, 5=Ball etc.
+
   options: {
     aspectRatioCorrection: true,
     inducedDrag: true,
     reynoldsCorrection: true,
     liftMode: 1,
   },
+  //Analysis options
+  liftAnalisis: 1, // 1 = Stall model, 2 = Ideal flow
+  ar: true, // AR Lift correction on/off
+  induced: true, // Induced drag on/off
+  reCorrection: true, // Reynolds number correction on/off
+
+  // outputs
+  shapeString: "Joukowski Airfoil",
+  density: 0.00237,
+  globalLift: 0,
+  globalDrag: 0,
+  globalPressure: 0,
+
+  // result boxes
+  lift: 0,
+  cLift: 0,
+  reynolds: 0,
+  drag: 0,
+  cDrag: 0,
+  liftOverDrag: 0,
+  pressOut: 0,
+  tempOut: 0,
+  viscOut: 0,
 };
 
 function foilSimReducer(state, action) {
@@ -30,19 +61,52 @@ function foilSimReducer(state, action) {
       const { key, value } = action;
       return {
         ...state,
+        outputButton: 5,
+        plot: 2,
+        inputButton: 5,
+        selectClicked: state.selectClicked + 1,
         [key]: typeof value === "number" ? value : Number(value),
       };
     }
     case "SET_ENVIRONMENT":
       return { ...state, environment: action.environment };
+
     case "SET_UNITS":
       return { ...state, units: action.units };
+
+    case "SET_PLOT":
+      return { ...state, plot: action.plot };
+
+    case "SET_INPUT_BUTTON":
+      return { ...state, inputButton: action.value };
+
+    case "SET_OUTPUT_BUTTON":
+      return { ...state, outputButton: action.value };
+
+    case "INCREMENT_SELECT_CLICKED":
+      return { ...state, selectClicked: state.selectClicked + 1 };
+
+    case "SET_SHAPE_SELECT":
+      return { ...state, shapeSelect: action.value };
+
+    case "SET_LIFT_ANALYSIS":
+      return { ...state, liftAnalisis: action.mode }; // 1 or 2
+
+    case "SET_AR":
+      return { ...state, ar: action.value }; // true / false
+
+    case "SET_INDUCED":
+      return { ...state, induced: action.value }; // true / false
+
+    case "SET_RE_CORRECTION":
+      return { ...state, reCorrection: action.value }; // true / false
+
     default:
       return state;
   }
 }
 
-// very simple physics stub so UI works
+/* very simple physics stub so UI works
 function computeOutputs(state) {
   const { angleDeg, velocity, chord, span, wingArea, environment, units } =
     state;
@@ -105,14 +169,20 @@ function computeOutputs(state) {
     reynolds,
     liftOverDrag,
   };
-}
+}*/
 
 export function FoilSimProvider({ children }) {
   const [state, dispatch] = useReducer(foilSimReducer, initialState);
 
   const outputs = useMemo(() => computeOutputs(state), [state]);
 
-  const setInput = (key, value) => dispatch({ type: "SET_INPUT", key, value });
+  const setPlot = (plot) => dispatch({ type: "SET_PLOT", plot });
+  const setInputButton = (value) =>
+    dispatch({ type: "SET_INPUT_BUTTON", value });
+  const setOutputButton = (value) =>
+    dispatch({ type: "SET_OUTPUT_BUTTON", value });
+  const incrementSelectClicked = () =>
+    dispatch({ type: "INCREMENT_SELECT_CLICKED" });
 
   const setEnvironment = (environment) =>
     dispatch({ type: "SET_ENVIRONMENT", environment });
@@ -169,6 +239,10 @@ export function FoilSimProvider({ children }) {
     state,
     derived,
     dispatch,
+    setPlot,
+    setInputButton,
+    setOutputButton,
+    incrementSelectClicked,
   };
 
   return (

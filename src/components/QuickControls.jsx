@@ -3,7 +3,11 @@ import React from "react";
 function safeCall(name) {
   const fn = window?.[name];
   if (typeof fn === "function") {
-    try { fn(); } catch (e) { console.error("Call failed:", name, e); }
+    try {
+      fn();
+    } catch (e) {
+      console.error("Call failed:", name, e);
+    }
   } else {
     console.warn("Missing global:", name);
   }
@@ -24,3 +28,13 @@ export default function QuickControls() {
     </div>
   );
 }
+
+/*
+<ShapeSelect />
+inside the FoilSimPanel
+
+<section style={{ marginBottom: "1rem" }}>
+  <ShapeSelect />
+</section>
+
+*/

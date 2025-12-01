@@ -1,191 +1,184 @@
-// It just uses your existing Airfoil / Ellipse / Plate / Cylinder / Ball classes.
+// src/foilsim/computeOutputs.js
+//
+// Modern, React-friendly physics pipeline.
+// Consumes FoilSimContext state and returns a structured outputs object.
+//
+// No NASA globals, no DOM, no shapeString, no old methods.
+// Works with your new object-based Shape / Airfoil classes.
+
+import { UnitSystem, Environment } from "../physics/shapeCore.js";
+import { Airfoil, Ellipse, Plate, Cylinder, Ball } from "../core/shape.js";
+
+// --- mappers -----------------------------------------------------------------
+
+function mapUnits(units) {
+  if (units === UnitSystem.IMPERIAL || units === UnitSystem.METRIC) {
+    return units;
+  }
+  if (units === 1 || units === "imperial" || units === "english") {
+    return UnitSystem.IMPERIAL;
+  }
+  return UnitSystem.METRIC;
+}
+
+function mapEnvironment(envCode) {
+  switch (envCode) {
+    case 2:
+      return Environment.MARS;
+    case 3:
+      return Environment.MERCURY;
+    case 4:
+      return Environment.VENUS;
+    case 1:
+    default:
+      return Environment.EARTH;
+  }
+}
+
+function mapShape(shapeCode) {
+  switch (shapeCode) {
+    case 1:
+      return "airfoil";
+    case 2:
+      return "ellipse";
+    case 3:
+      return "plate";
+    case 4:
+      return "cylinder";
+    case 5:
+      return "ball";
+    default:
+      return "airfoil";
+  }
+}
+
+// -----------------------------------------------------------------------------
+// MAIN COMPUTE FUNCTION
+// -----------------------------------------------------------------------------
 
 export function computeOutputs(state) {
+  // 1) destructure the FoilSim state
   const {
-    shapeSelect,
-    environmentSelect,
-    units, // 1 = imperial, 2 = metric (you can map from "metric"/"imperial")
-    angle,
-    camber,
-    thickness,
+    angleDeg,
+    camberPct,
+    thicknessPct,
     velocity,
     altitude,
     chord,
     span,
-    area,
+    wingArea,
+
+    units,
+    environment,
+
+    // modern model flags
+    shapeSelect,
+    ar,
+    induced,
+    reCorrection,
+    liftAnalisis, // 1 = stall-clamp, 2 = ideal
     radius,
     spin,
-    aspr,
   } = state;
 
-  // --- Instantiate shapes using your existing classes ---
-  const airfoil = new Airfoil(
-    angle,
-    camber,
-    thickness,
+  // 2) normalize units + environment + shape type
+  const unitSystem = mapUnits(units);
+  const envEnum = mapEnvironment(environment);
+  const shapeType = mapShape(shapeSelect);
+
+  // 3) base configuration passed into the new Shape constructors
+  const baseCfg = {
+    angleDeg,
+    camberPercent: camberPct,
+    thicknessPercent: thicknessPct,
     velocity,
     altitude,
     chord,
     span,
-    area
-  );
-  const ellipse = new Ellipse(
-    angle,
-    camber,
-    thickness,
-    velocity,
-    altitude,
-    chord,
-    span,
-    area
-  );
-  const plate = new Plate(
-    angle,
-    camber,
-    thickness,
-    velocity,
-    altitude,
-    chord,
-    span,
-    area
-  );
-  const cylinder = new Cylinder(
-    0.0,
-    0.0,
-    thickness,
-    velocity,
-    altitude,
-    5.0,
-    span,
-    100.0,
-    radius,
-    spin
-  );
-  const ball = new Ball(
-    0.0,
-    0.0,
-    thickness,
-    velocity,
-    altitude,
-    5.0,
-    radius,
-    100.0,
-    radius,
-    spin
-  );
-
-  // Helper to describe environment properties for each medium
-  function envFromAirfoil(env) {
-    switch (env) {
-      case "earth":
-        return {
-          p: airfoil.getPressureEarth(),
-          rho: airfoil.getRhoEarth(),
-          q0: airfoil.getQ0Earth(),
-          T: airfoil.getTempEarth(),
-          mu: airfoil.getViscosEarth(),
-        };
-      case "mars":
-        return {
-          p: airfoil.getPressureMars(),
-          rho: airfoil.getRhoMars(),
-          q0: airfoil.getQ0Mars(),
-          T: airfoil.getTempMars(),
-          mu: airfoil.getViscosMars(),
-        };
-      case "mercury":
-        return {
-          p: airfoil.getPressureMercury(),
-          rho: airfoil.getRhoMercury(),
-          q0: airfoil.getQ0Mercury(),
-          T: airfoil.getMercuryTemp(),
-          mu: airfoil.getViscosMercury(),
-        };
-      case "venus":
-        return {
-          p: airfoil.getPressureVenus(),
-          rho: airfoil.getRhoVenus(),
-          q0: airfoil.getQ0Venus(),
-          T: airfoil.getTempVenus(),
-          mu: airfoil.getViscosVenus(),
-        };
-      default:
-        return null;
-    }
-  }
-
-  // Map environmentSelect → medium string
-  let envMedium = "earth";
-  if (environmentSelect === 2) envMedium = "mars";
-  else if (environmentSelect === 3) envMedium = "mercury";
-  else if (environmentSelect === 4) envMedium = "venus";
-
-  // Base result object
-  let result = {
-    shapeString: "",
-    // main aero outputs
-    lift: 0,
-    drag: 0,
-    cL: 0,
-    cD: 0,
-    Re: 0,
-    L_over_D: 0,
-    // environment outputs (base, before unit conversions)
-    env: {
-      medium: envMedium, // "earth"/"mars"/"mercury"/"venus"
-      p: 0,
-      rho: 0,
-      q0: 0,
-      T: 0,
-      mu: 0,
-    },
-    // some UI-related things you might want
-    lengthUnit: units === 1 ? "ft" : "m",
-    forceUnit: units === 1 ? "lb" : "N",
+    wingArea,
+    units: unitSystem,
+    environment: envEnum,
   };
 
-  // --- Example: shapeSelect == 1 (Joukowski airfoil) ---
-  if (shapeSelect === 1) {
-    result.shapeString = "Joukowski Airfoil";
-    result.lift = airfoil.getLift();
-    result.drag = airfoil.getDrag();
-    result.cL = airfoil.getLiftCoefficient();
-    result.cD = airfoil.getDragCoefficient();
-    result.Re = airfoil.getReynolds();
-    result.L_over_D = airfoil.getLiftOverDrag();
+  // 4) build all shape objects (object-style constructors)
+  const airfoil = new Airfoil({
+    ...baseCfg,
+    aspectRatioCorrection: ar,
+    inducedDrag: induced,
+    reynoldsCorrection: reCorrection,
+    liftMode: liftAnalisis,
+  });
 
-    const envBase = envFromAirfoil(envMedium);
-    if (envBase) {
-      result.env = envBase;
-    }
+  const ellipse = new Ellipse(baseCfg);
+  const plate = new Plate(baseCfg);
+  const cylinder = new Cylinder({ ...baseCfg, radius, spin });
+  const ball = new Ball({ ...baseCfg, radius, spin });
 
-    // You can also precompute some of the converted values if you like.
-    // For example, for imperial units and Earth:
-    if (units === 1 && envMedium === "earth") {
-      result.envDisplay = {
-        // pressure in psi
-        staticPressure: envBase.p / 144.0,
-        density: envBase.rho,
-        dynPressure: envBase.q0,
-        temp: envBase.T - 460.0, // Rankine -> °F approx
-        viscosity: envBase.mu,
-      };
-    } else if (units === 2 && envMedium === "earth") {
-      // Metric Earth example
-      result.envDisplay = {
-        staticPressure: ((101.3 / 14.7) * envBase.p) / 144.0,
-        density: envBase.rho * 515.4,
-        dynPressure: ((101.3 / 14.7) * envBase.q0) / 144.0,
-        temp: (envBase.T * 5.0) / 9.0 - 273.1,
-        viscosity: envBase.mu * 47.87,
-      };
-    }
-    // You can follow the same mapping logic for Mars/mercury/Venus
+  // 5) select which object is active
+  let obj = airfoil;
+  if (shapeSelect === 2) obj = ellipse;
+  if (shapeSelect === 3) obj = plate;
+  if (shapeSelect === 4) obj = cylinder;
+  if (shapeSelect === 5) obj = ball;
+
+  // 6) fundamental flow properties from getAtmosphere()
+  const atm = obj.getAtmosphere();
+  const rho = atm?.rho ?? 0;
+  const mu = atm?.mu ?? 0;
+  const q0Factor = atm?.q0Factor ?? 0;
+  const ps0 = atm?.ps0 ?? 0;
+  const ts0 = atm?.ts0 ?? 0; // Rankine (NASA style)
+
+  const temperatureF = ts0 - 459.67;
+  const temperatureC = ((temperatureF - 32) * 5) / 9;
+
+  const dynamicPressure = obj.getDynamicPressure();
+  const reynolds = obj.getReynolds();
+
+  // 7) aerodynamic coefficients and forces
+  let cl = 0,
+    cd = 0,
+    lift = 0,
+    drag = 0,
+    ld = 0;
+
+  if (obj instanceof Airfoil) {
+    cl = obj.getLiftCoefficient();
+    cd = obj.getDragCoefficient();
+    lift = obj.getLift();
+    drag = obj.getDrag();
+    ld = obj.getLiftOverDrag();
   }
 
-  // --- TODO: extend to shapeSelect 2, 3, 4, 5 (ellipse, plate, cylinder, ball) ---
-  // For each, copy the pattern above but use the ellipse/plate/cylinder/ball
-  // methods instead of Airfoil's.
-
-  return result;
+  // 8) Assemble a clean modern outputs object
+  return {
+    shapeType,
+    aerodynamics: {
+      cl,
+      cd,
+      lift,
+      drag,
+      liftOverDrag: ld,
+      reynolds,
+    },
+    environment: {
+      rho,
+      mu,
+      ps0,
+      temperatureRankine: ts0,
+      temperatureF,
+      temperatureC,
+      dynamicPressure,
+    },
+    geometry: {
+      chord,
+      span,
+      wingArea,
+      aspectRatio: span && chord ? span / chord : 0,
+      angleDeg,
+      camberPct,
+      thicknessPct,
+    },
+    _activeBody: obj,
+  };
 }

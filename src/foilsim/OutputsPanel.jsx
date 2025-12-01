@@ -1,6 +1,5 @@
-import React from "react";
-import { useFoilSim } from "./store.jsx";
 import { computeOutputs } from "./computeOutputs.js";
+import { useFoilSim } from "../store/FoilSimContext.jsx";
 
 export default function OutputsPanel() {
   const { state, set } = useFoilSim();
