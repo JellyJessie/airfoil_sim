@@ -59,15 +59,30 @@ function foilSimReducer(state, action) {
   switch (action.type) {
     case "SET_INPUT": {
       const { key, value } = action;
-      return {
+      const numeric = typeof value === "number" ? value : Number(value);
+
+      // base update
+      let next = {
         ...state,
-        outputButton: 5,
-        plot: 2,
-        inputButton: 5,
-        selectClicked: state.selectClicked + 1,
-        [key]: typeof value === "number" ? value : Number(value),
+        [key]: numeric,
       };
+
+      // Wingspan → area auto-update (rectangular wing)
+      if (key === "chord" || key === "span") {
+        const chord = key === "chord" ? numeric : next.chord;
+        const span = key === "span" ? numeric : next.span;
+
+        if (chord > 0 && span > 0) {
+          next = {
+            ...next,
+            wingArea: chord * span,
+          };
+        }
+      }
+
+      return next;
     }
+
     case "SET_ENVIRONMENT":
       return { ...state, environment: action.environment };
 
@@ -235,9 +250,13 @@ export function FoilSimProvider({ children }) {
     derivedShape,
     derived,
     shape,*/
+
   const value = {
     state,
-    derived,
+    outputs, // ← NEW: full aero + geometry + environment
+    shape, // optional: low-level Shape for experiments
+    derivedShape, // optional: e.g. Reynolds from core Shape
+    derived, // your computeAirfoil() results
     dispatch,
     setPlot,
     setInputButton,

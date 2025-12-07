@@ -10,6 +10,7 @@ import { OutputTabs } from "./foilsim/OutputTabs.jsx";
 import PlotButtons from "./components/PlotButtons.jsx";
 import PlotControls from "./foilsim/PlotControls.jsx";
 import AnalysisPanel from "./components/AnalysisPanel.jsx";
+import PlotPanel from "./foilsim/PlotPanel.jsx";
 /**
  * Simple angle-of-attack slider using FoilSim context
  */
@@ -64,7 +65,7 @@ function FoilSimPanel() {
 
   const handleInput = (key) => (e) => {
     const value = parseFloat(e.target.value || "0");
-    dispatch({ type: "SET_INPUT", key, value });
+    dispatch({ type: "SET_INPUT", key: "span", value: e.target.value });
   };
 
   return (
@@ -140,22 +141,23 @@ function FoilSimPanel() {
         {Number.isFinite(reynolds) ? reynolds.toExponential(3) : "—"}
       </section>
 
-      {/*
       <section style={{ marginTop: "1rem" }}>
         <h2>Plot selection</h2>
         <PlotButtons visible={true} />
       </section>
 
-      <PlotControls />
-      */}
+      {/*<PlotControls />
+      <PlotPanel /> */}
       <section>
         <OutputTabs />
 
         {outputButton === 4 && (
           <>
-            {/*<div style={{ marginTop: "0.5rem", fontWeight: 600 }}>
-              Select Plot
-            </div>*/}
+            {
+              <div style={{ marginTop: "0.5rem", fontWeight: 600 }}>
+                Select Plot
+              </div>
+            }
             <div>Surface:</div>
 
             {/* always show surface choices */}
@@ -163,7 +165,7 @@ function FoilSimPanel() {
 
             {shapeSelect <= 3 && (
               <>
-                {/*<PlotControls />{" "} */}
+                <PlotControls />{" "}
                 {/* Speed / Altitude / Wing / Density row we wrote */}
                 {/* Later: add Angle / Camber / Thickness row */}
               </>
