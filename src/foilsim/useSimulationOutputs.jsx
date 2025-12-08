@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { useFoilSim } from "./store.jsx";
 import { computeOutputs } from "./computeOutputs.js";
+import { useFoilSim } from "../store/FoilSimContext.jsx";
 
 export function useSimulationOutputs() {
   const { state, setMany } = useFoilSim();

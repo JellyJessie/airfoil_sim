@@ -1,41 +1,52 @@
 import React from "react";
 import { useFoilSim } from "../store/FoilSimContext";
 
+const OUTPUT_MODES = [
+  { id: 1, key: "gage", label: "Gage" },
+  { id: 2, key: "geometry", label: "Geometry" },
+  { id: 3, key: "data", label: "Data" },
+  { id: 4, key: "plot", label: "Plot" },
+];
+
 export function OutputTabs() {
   const {
     state: { outputButton },
     dispatch,
   } = useFoilSim();
 
-  const setOutput = (value) =>
+  const setOutput = (value) => {
     dispatch({
       type: value === 4 ? "SELECT_PLOT_PANEL" : "SET_OUTPUT_BUTTON",
       outputButton: value,
     });
+  };
 
-  const styleFor = (id) => ({
-    padding: "4px 10px",
-    marginRight: "6px",
-    borderRadius: 4,
-    border: "1px solid #ccc",
-    backgroundColor: outputButton === id ? "yellow" : "#f5f5f5",
-    cursor: "pointer",
-  });
+  const handleClick = (id) => {
+    setOutput(id); // ✅ correct
+  };
 
   return (
-    <div style={{ marginBottom: "0.5rem" }}>
-      <button style={styleFor(1)} onClick={() => setOutput(1)}>
-        Gauge
-      </button>
-      <button style={styleFor(2)} onClick={() => setOutput(2)}>
-        Geometry
-      </button>
-      <button style={styleFor(3)} onClick={() => setOutput(3)}>
-        Data
-      </button>
-      <button style={styleFor(4)} onClick={() => setOutput(4)}>
-        Plot
-      </button>
+    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+      {OUTPUT_MODES.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          onClick={() => handleClick(m.id)}
+          style={{
+            zIndex: 9999,
+            pointerEvents: "auto",
+            position: "relative",
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: "1px solid #ccc",
+            backgroundColor: outputButton === m.id ? "yellow" : "white",
+            cursor: "pointer",
+          }}
+        >
+          {m.label}
+        </button>
+      ))}
     </div>
   );
 }
+export default OutputTabs;

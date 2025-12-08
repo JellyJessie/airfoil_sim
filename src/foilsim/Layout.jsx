@@ -3,9 +3,9 @@ import React from "react";
 import InputTabs from "./InputTabs.jsx";
 import FlightPanel from "./FlightPanel.jsx";
 import SizePanel from "./SizePanel.jsx";
-import AnalysisPanel from "./AnalysisPanel.jsx";
+import AnalyPanel from "./AnalyPanel.jsx";
 import OutputsPanel from "./OutputsPanel.jsx";
-import { useFoilSim } from "./store.jsx";
+import { useFoilSim } from "../store/FoilSimContext.jsx";
 
 export default function Layout() {
   const { state } = useFoilSim();
@@ -18,7 +18,7 @@ export default function Layout() {
   } else if (mode === 2) {
     inputPanel = <FlightPanel />;
   } else {
-    inputPanel = <AnalysisPanel />;
+    inputPanel = <AnalyPanel />;
   }
 
   return (

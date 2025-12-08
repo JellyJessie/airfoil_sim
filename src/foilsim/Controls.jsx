@@ -1,5 +1,5 @@
 import React from "react";
-import { useFoilSim } from "./store";
+import { useFoilSim } from "../store/FoilSimContext";
 
 export default function Controls() {
   const { state, set, toggleUnits } = useFoilSim();

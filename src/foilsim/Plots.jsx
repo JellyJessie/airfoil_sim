@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
-import { useFoilSim } from "./store";
 import { metrics, cpDistribution } from "./aero";
+import { useFoilSim } from "../store/FoilSimContext";
 
 // If you prefer Plotly, install react-plotly.js. Here we keep a simple table to stay dependency-light.
 export default function Plots() {

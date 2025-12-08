@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { useFoilSim } from "./store.jsx";
+import { useFoilSim } from "../store/FoilSimContext";
 
 function getSizeRanges(units, environmentSelect) {
   const isMetric = units === "metric";

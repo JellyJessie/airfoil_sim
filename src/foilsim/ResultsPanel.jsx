@@ -1,6 +1,6 @@
 // src/foilsim/ResultsPanel.jsx
 import React from "react";
-import { useFoilSim } from "./store.jsx";
+import { useFoilSim } from "../store/FoilSimContext";
 
 export default function ResultsPanel() {
   const { state } = useFoilSim();

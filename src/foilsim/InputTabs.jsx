@@ -1,5 +1,5 @@
 import React from "react";
-import { useFoilSim } from "./store.jsx";
+import { useFoilSim } from "../store/FoilSimContext";
 
 // 1 = Shape, 2 = Flight, 3 = Analysis, 4 = Size, 5 = Select
 const INPUT_MODES = [
@@ -31,38 +31,6 @@ export default function InputTabs({ onModeChange }) {
   return (
     <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
       {INPUT_MODES.map((m) => (
-        <button
-          key={m.id}
-          type="button"
-          onClick={() => handleClick(m.id)}
-          style={{
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: "1px solid #ccc",
-            backgroundColor: current === m.id ? "yellow" : "white",
-            cursor: "pointer",
-          }}
-        >
-          {m.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// Optional: named export for output tabs
-export function OutputTabs({ onModeChange }) {
-  const { state, set } = useFoilSim();
-  const current = state.outputButton ?? 1;
-
-  const handleClick = (id) => {
-    set("outputButton", id);
-    if (onModeChange) onModeChange(id);
-  };
-
-  return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-      {OUTPUT_MODES.map((m) => (
         <button
           key={m.id}
           type="button"

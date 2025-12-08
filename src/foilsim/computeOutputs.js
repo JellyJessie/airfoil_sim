@@ -1,23 +1,39 @@
 // src/foilsim/computeOutputs.js
+//
+// Clean, React-friendly computeOutputs()
+// Fully wired to the new DOM-free physics core in foilPhysics.js
 
+import {
+  dynamicPressure,
+  reynoldsNumber,
+  liftCoefficient,
+  dragCoefficient,
+  liftForce,
+  dragForce,
+  calculateLiftCoefficientJoukowski,
+  calculateLiftForce,
+  calculateDragCoefficientModern,
+  calculateDragForce,
+  calculateReynolds,
+  calculateDrag,
+} from "../physics/foilPhysics";
+
+// Optional: if you still want enum-style units/env elsewhere
 import { UnitSystem, Environment } from "../physics/shapeCore.js";
-import { Airfoil, Ellipse, Plate, Cylinder, Ball } from "../core/shape.js";
 
-// --- mappers ---------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
 function mapUnits(units) {
-  // allow string ("metric"/"imperial") or enum or numeric
   if (units === UnitSystem.IMPERIAL || units === "imperial" || units === 1) {
     return UnitSystem.IMPERIAL;
-  }
-  if (units === UnitSystem.METRIC || units === "metric" || units === 2) {
-    return UnitSystem.METRIC;
   }
   return UnitSystem.METRIC;
 }
 
-function mapEnvironment(envCode) {
-  switch (envCode) {
+function mapEnvironment(environmentSelect) {
+  switch (environmentSelect) {
     case 2:
       return Environment.MARS;
     case 3:
@@ -47,28 +63,28 @@ function mapShape(shapeSelect) {
   }
 }
 
-// Build a CL–α sweep around the current airfoil configuration
-function buildAlphaSweep(airfoil, alphaMin = -10, alphaMax = 20, step = 1) {
+// Build CL–α sweep for Plot Panel
+function buildAlphaSweep({
+  camberPct,
+  alphaMin = -10,
+  alphaMax = 20,
+  step = 1,
+}) {
   const alphas = [];
   const cls = [];
 
-  const originalAngle = airfoil.getAngle();
-
   for (let a = alphaMin; a <= alphaMax; a += step) {
-    airfoil.setAngle(a);
+    const cl = liftCoefficient(a, camberPct);
     alphas.push(a);
-    cls.push(airfoil.getLiftCoefficient());
+    cls.push(cl);
   }
-
-  // restore original AoA so we don’t surprise the rest of the code
-  airfoil.setAngle(originalAngle);
 
   return { alphas, cls };
 }
 
-// ---------------------------------------------------------------------------
-// MAIN
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// MAIN COMPUTE FUNCTION
+// -----------------------------------------------------------------------------
 
 export function computeOutputs(state) {
   const {
@@ -84,134 +100,141 @@ export function computeOutputs(state) {
 
     // discrete selections
     units,
-    environment: environmentSelect, // 1..4
-    shapeSelect, // 1..5
+    environment: environmentSelect,
+    shapeSelect,
 
-    // options / physics toggles
+    // aero options
+    liftAnalisis, // 1 = stall model, 2 = ideal
     ar,
     induced,
     reCorrection,
-    liftAnalisis, // 1 = stall, 2 = ideal
 
-    // spinning body
+    // rotating body (future extension)
     radius,
     spin,
   } = state;
 
+  // --- normalize selections --------------------------------------------------
+
   const unitSystem = mapUnits(units);
-  const envEnum = mapEnvironment(environmentSelect);
+  const environment = mapEnvironment(environmentSelect);
   const shapeType = mapShape(shapeSelect);
 
-  // Base config for all shapes
-  const baseCfg = {
-    angleDeg,
-    camberPercent: camberPct,
-    thicknessPercent: thicknessPct,
-    velocity,
-    altitude,
-    chord,
-    span,
-    wingArea,
-    units: unitSystem,
-    environment: envEnum,
-  };
+  // --- flow properties -------------------------------------------------------
 
-  // Build bodies
-  const airfoil = new Airfoil({
-    ...baseCfg,
-    aspectRatioCorrection: ar,
-    inducedDrag: induced,
-    reynoldsCorrection: reCorrection,
-    liftMode: liftAnalisis,
+  const q = dynamicPressure(velocity, altitude); // q = 0.5 rho V^2
+  const reynolds = reynoldsNumber(velocity, chord, altitude);
+
+  // --- aerodynamics ----------------------------------------------------------
+
+  // Lift coefficient (thin airfoil + stall model)
+  const cl = liftCoefficient(angleDeg, camberPct);
+
+  const aspectRatio = wingArea > 0 ? (span * span) / wingArea : 0;
+
+  const cd = dragCoefficient({
+    cl,
+    reynolds,
+    thicknessPct,
+    aspectRatio: aspectRatio || 4,
   });
 
-  const ellipse = new Ellipse(baseCfg);
-  const plate = new Plate(baseCfg);
-  const cylinder = new Cylinder({ ...baseCfg, radius, spin });
-  const ball = new Ball({ ...baseCfg, radius, spin });
+  const lift = liftForce(q, wingArea, cl);
+  const drag = dragForce(q, wingArea, cd);
 
-  // Active body based on shapeSelect
-  let obj = airfoil;
-  if (shapeSelect === 2) obj = ellipse;
-  if (shapeSelect === 3) obj = plate;
-  if (shapeSelect === 4) obj = cylinder;
-  if (shapeSelect === 5) obj = ball;
+  const liftOverDrag = drag !== 0 && isFinite(drag) ? lift / drag : 0;
 
-  // Environment / flow
-  const atm = obj.getAtmosphere();
-  const rho = atm?.rho ?? 0;
-  const mu = atm?.mu ?? 0;
-  const q0Factor = atm?.q0Factor ?? 0;
-  const ps0 = atm?.ps0 ?? 0;
-  const ts0 = atm?.ts0 ?? 0; // Rankine
+  // --- CL–alpha plot sweep ---------------------------------------------------
 
-  const temperatureF = ts0 - 459.67;
-  const temperatureC = ((temperatureF - 32) * 5) / 9;
+  const clAlpha = buildAlphaSweep({
+    camberPct,
+    alphaMin: -10,
+    alphaMax: 20,
+    step: 1,
+  });
 
-  const dynamicPressure = obj.getDynamicPressure();
-  const reynolds = obj.getReynolds();
-
-  // Aerodynamics (currently implemented for Airfoil)
-  let cl = 0;
-  let cd = 0;
-  let lift = 0;
-  let drag = 0;
-  let liftOverDrag = 0;
-
-  if (obj instanceof Airfoil) {
-    cl = obj.getLiftCoefficient();
-    cd = obj.getDragCoefficient();
-    lift = obj.getLift();
-    drag = obj.getDrag();
-    liftOverDrag = obj.getLiftOverDrag();
-  }
-
-  // CL–α sweep for plots (always based on airfoil for now)
-  const clAlpha = buildAlphaSweep(airfoil, -10, 20, 1);
+  // --- structured output for panels -----------------------------------------
 
   return {
-    // basic geometry / inputs
+    // geometry panel
+    shapeType,
     angleDeg,
     camberPct,
     thicknessPct,
-    velocity,
-    altitude,
     chord,
     span,
     wingArea,
-    shapeType,
+    aspectRatio,
 
-    // aero summary
-    lift,
-    drag,
+    // aero gage panel
     cl,
     cd,
+    lift,
+    drag,
     reynolds,
     liftOverDrag,
 
-    // environment
-    rho,
-    mu,
-    ps0,
-    q0Factor,
-    temperatureRankine: ts0,
-    temperatureF,
-    temperatureC,
-    dynamicPressure,
+    // environment (minimal, can be extended)
+    velocity,
+    altitude,
+    q,
 
-    // plot data
+    // plot panel
     plots: {
       clAlpha, // { alphas: [...], cls: [...] }
     },
 
-    // keep bodies for advanced use/inspection
-    _bodies: {
-      airfoil,
-      ellipse,
-      plate,
-      cylinder,
-      ball,
-      active: obj,
+    // future (optional)
+    rotation: {
+      radius,
+      spin,
     },
+
+    // raw selections (debugging / UI logic)
+    units: unitSystem,
+    environment,
   };
 }
+
+/*
+
+// Drag coefficient
+const cd = calculateDragCoefficientModern({
+  camberDeg: camberPct,
+  thicknessPct,
+  alphaDeg: angleDeg,
+  reynolds,
+  cl,
+});
+
+// Forces
+const lift = calculateLiftForce(
+  velocity,
+  altitude,
+  wingArea,
+  vconv,
+  q0T,
+  q0S,
+  cl
+);
+
+const drag = calculateDragForce(
+  velocity,
+  altitude,
+  wingArea,
+  vconv,
+  q0T,
+  q0S,
+  cd
+);
+
+const reynolds = calculateReynolds({
+  velocity,
+  altitude,
+  chord,
+  densityTrop,
+  densityStrat,
+});
+
+
+*/

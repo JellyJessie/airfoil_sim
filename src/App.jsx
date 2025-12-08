@@ -9,8 +9,9 @@ import QuickControls from "./components/QuickControls.jsx";
 import { OutputTabs } from "./foilsim/OutputTabs.jsx";
 import PlotButtons from "./components/PlotButtons.jsx";
 import PlotControls from "./foilsim/PlotControls.jsx";
-import AnalysisPanel from "./components/AnalysisPanel.jsx";
-import PlotPanel from "./foilsim/PlotPanel.jsx";
+import AnalysisPanel from "./foilsim/AnalysisPanel.jsx";
+import InputTabs from "./foilsim/InputTabs.jsx";
+
 /**
  * Simple angle-of-attack slider using FoilSim context
  */
@@ -149,8 +150,6 @@ function FoilSimPanel() {
       {/*<PlotControls />
       <PlotPanel /> */}
       <section>
-        <OutputTabs />
-
         {outputButton === 4 && (
           <>
             {
@@ -214,6 +213,20 @@ export default function App() {
   return (
     <FoilSimProvider>
       <AppInner />
+      <div className="app foilsim-layout">
+        {/* Left side: controls */}
+        <div className="foilsim-left">
+          <h2>FoilSim</h2>
+          <InputTabs />
+        </div>
+
+        {/* Right side: NASA-style Gage/Geometry/Data/Plot outputs */}
+        <div className="foilsim-right">
+          <div style={{ position: "relative", zIndex: 5000 }}>
+            <OutputTabs />
+          </div>
+        </div>
+      </div>
     </FoilSimProvider>
   );
 }

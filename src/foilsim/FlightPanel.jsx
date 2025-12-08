@@ -1,6 +1,6 @@
 // src/foilsim/FlightPanel.jsx
 import React from "react";
-import { useFoilSim } from "./store.jsx";
+import { useFoilSim } from "../store/FoilSimContext";
 
 const ENV_OPTIONS = [
   { id: 1, label: "Earth – Average Day" },
