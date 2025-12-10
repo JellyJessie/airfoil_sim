@@ -13,6 +13,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "plotly.js-dist-min": "^3.3.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "^0.181.1"

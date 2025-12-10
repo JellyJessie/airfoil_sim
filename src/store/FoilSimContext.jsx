@@ -1,8 +1,8 @@
 // src/store/FoilSimContext.jsx
 import React, { createContext, useContext, useReducer, useMemo } from "react";
 import { UnitSystem, Environment } from "../physics/shapeCore";
-import { Shape } from "../core/shape.js";
-import { computeAirfoil } from "../core/foilSimCore";
+import { Shape } from "../components/shape.js";
+import { computeAirfoil } from "../components/foilSimCore.js";
 import { computeOutputs } from "../foilsim/computeOutputs";
 
 const FoilSimContext = createContext(null);
@@ -120,71 +120,6 @@ function foilSimReducer(state, action) {
       return state;
   }
 }
-
-/* very simple physics stub so UI works
-function computeOutputs(state) {
-  const { angleDeg, velocity, chord, span, wingArea, environment, units } =
-    state;
-
-  // Pick a density based on environment (very rough constants)
-  let rho;
-  switch (environment) {
-    case Environment.MARS:
-      rho = 0.02;
-      break;
-    case Environment.MERCURY:
-      rho = 1000;
-      break;
-    case Environment.VENUS:
-      rho = 65;
-      break;
-    case Environment.EARTH:
-    default:
-      rho = 1.225;
-      break;
-  }
-
-  // Velocity in m/s (very rough conversion)
-  let V = velocity;
-  if (units === UnitSystem.IMPERIAL) {
-    // assume ft/s -> m/s
-    V = velocity * 0.3048;
-  }
-
-  // Thin airfoil approx: CL ≈ 2π α (radians)
-  const alphaRad = (angleDeg * Math.PI) / 180;
-  let cl = 2 * Math.PI * alphaRad;
-
-  // Simple stall clamp
-  if (angleDeg > 15 || angleDeg < -15) {
-    cl *= 0.5;
-  }
-
-  const aspectRatio = (span * span) / wingArea;
-  const e = 0.9;
-  const cd0 = 0.01 + 0.002 * (state.thicknessPct / 12.5 - 1);
-  const cdInduced = (cl * cl) / (Math.PI * aspectRatio * e);
-  const cd = cd0 + cdInduced;
-
-  const q = 0.5 * rho * V * V; // dynamic pressure
-  const lift = q * wingArea * cl;
-  const drag = q * wingArea * cd;
-
-  const liftOverDrag = drag === 0 || !isFinite(drag) ? 0 : lift / drag;
-
-  // Reynolds number ~ rho V c / mu
-  const mu = 1.8e-5; // air, rough; mercury/venus/mars won't be accurate
-  const reynolds = (rho * V * chord) / mu;
-
-  return {
-    lift,
-    drag,
-    cl,
-    cd,
-    reynolds,
-    liftOverDrag,
-  };
-}*/
 
 export function FoilSimProvider({ children }) {
   const [state, dispatch] = useReducer(foilSimReducer, initialState);

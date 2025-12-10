@@ -1,7 +1,3 @@
-// src/physics/foilPhysics.js
-// Clean, DOM-free aerodynamics core extracted from FoilSimStudent_Calc.js
-// Fully React-friendly, testable, and composable.
-
 export const PI = Math.PI;
 
 // ------------------------
@@ -27,9 +23,15 @@ export function pressureLbFt2(altitudeFt) {
 }
 
 export function densitySlugFt3(altitudeFt) {
-  const T = temperatureRankine(altitudeFt);
-  const P = pressureLbFt2(altitudeFt);
-  return P / (1718 * T);
+  if (altitudeFt <= 36152) {
+    const temp = 518.6 - 0.00356 * altitudeFt;
+    const pressure = 2116 * Math.pow(temp / 518.6, 5.256);
+    return pressure / (1716 * temp);
+  } else {
+    const temp = 389.98;
+    const pressure = 473.1 * Math.exp((36152 - altitudeFt) / 20805);
+    return pressure / (1716 * temp);
+  }
 }
 
 export function viscositySlugFtS(altitudeFt) {
@@ -38,6 +40,9 @@ export function viscositySlugFtS(altitudeFt) {
   return ((mu0 * 717.408) / (T + 198.72)) * Math.pow(T / 518.688, 1.5);
 }
 
+export function getDensityFromAltitude(altitude) {
+  return densitySlugFt3(altitude);
+}
 // ------------------------
 // Flow Properties
 // ------------------------
@@ -45,18 +50,6 @@ export function viscositySlugFtS(altitudeFt) {
 export function dynamicPressure(velocity, altitudeFt, vconv = 0.6818) {
   const rho = densitySlugFt3(altitudeFt);
   return (0.5 * rho * velocity * velocity) / (vconv * vconv);
-}
-
-export function reynoldsNumber(
-  velocity,
-  chordFt,
-  altitudeFt,
-  vconv = 0.6818,
-  lconv = 1.0
-) {
-  const rho = densitySlugFt3(altitudeFt);
-  const mu = viscositySlugFtS(altitudeFt);
-  return (velocity / vconv) * (chordFt / lconv) * (rho / mu);
 }
 
 // ------------------------
@@ -86,7 +79,7 @@ export function liftCoefficient(alphaDeg, camberPct = 0) {
 // Drag Coefficient (Modernized Replacement)
 // ------------------------
 
-export function dragCoefficient({
+/*export function dragCoefficient({
   cl,
   reynolds,
   thicknessPct = 12,
@@ -102,6 +95,105 @@ export function dragCoefficient({
   }
 
   // Induced drag
+  const induced = (cl * cl) / (PI * aspectRatio * efficiency);
+
+  return cd0 + induced;
+}*/
+
+/* ============================
+   Polynomial evaluation
+============================ */
+function poly(alpha, c) {
+  return (
+    c[0] * alpha ** 6 +
+    c[1] * alpha ** 5 +
+    c[2] * alpha ** 4 +
+    c[3] * alpha ** 3 +
+    c[4] * alpha ** 2 +
+    c[5] * alpha +
+    c[6]
+  );
+}
+
+/* ============================
+   Polynomial database
+============================ */
+const DRAG_POLYS = {
+  5: {
+    0: [-9e-7, 0, 0.0007, 0.0008, 0, 0, 0.015],
+    5: [4e-8, -7e-7, -1e-5, 0.0009, 0, 0.0033, 0.0301],
+    10: [-9e-9, -6e-8, 5e-6, 3e-5, -0.0001, -0.0025, 0.0615],
+    15: [8e-10, -5e-8, -1e-6, 3e-5, 0.0008, -0.0027, 0.0612],
+    20: [8e-9, 1e-8, -5e-6, 6e-6, 0.001, -0.001, 0.1219],
+  },
+
+  10: {
+    0: [-1e-8, 6e-8, 6e-6, -2e-5, -0.0002, 0.0017, 0.0196],
+    5: [3e-9, 6e-8, -2e-6, -3e-5, 0.0008, 0.0038, 0.0159],
+    10: [-5e-9, -3e-8, 2e-6, 1e-5, 0.0004, -3e-5, 0.0624],
+    15: [-2e-9, -2e-8, -5e-7, 8e-6, 0.0009, 0.0034, 0.0993],
+    20: [2e-9, -3e-8, -2e-6, 2e-5, 0.0009, 0.0023, 0.1581],
+  },
+
+  15: {
+    0: [-5e-9, 7e-8, 3e-6, -3e-5, -7e-5, 0.0017, 0.0358],
+    5: [-4e-9, -8e-9, 2e-6, -9e-7, 0.0002, 0.0031, 0.0351],
+    10: [3e-9, 3e-8, -2e-6, -1e-5, 0.0009, 0.004, 0.0543],
+    15: [3e-9, 5e-8, -2e-6, -3e-5, 0.0008, 0.0087, 0.1167],
+    20: [3e-10, -3e-8, -6e-7, 3e-5, 0.0006, 0.0008, 0.1859],
+  },
+
+  20: {
+    0: [-3e-9, 2e-8, 2e-6, -8e-6, -4e-5, 0.0003, 0.0416],
+    5: [-3e-9, -7e-8, 1e-6, 3e-5, 0.0004, 5e-5, 0.0483],
+    10: [1e-8, 4e-8, -6e-6, -2e-5, 0.0014, 0.007, 0.0692],
+    15: [3e-9, -9e-8, -3e-6, 4e-5, 0.001, 0.0021, 0.139],
+    20: [3e-9, -7e-8, -3e-6, 4e-5, 0.0012, 0.001, 0.1856],
+  },
+};
+
+/* ============================
+   Linear interpolation
+============================ */
+function lerp(x, x0, x1, y0, y1) {
+  return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+}
+
+/* ============================
+   Main Physically Faithful Model
+============================ */
+export function calculateDragCoefficient({
+  camberDeg,
+  thicknessPct,
+  alphaDeg,
+  reynolds,
+  cl,
+  aspectRatio = 4.0,
+  efficiency = 0.85,
+}) {
+  const camLevels = [0, 5, 10, 15, 20];
+  const thkLevels = [5, 10, 15, 20];
+
+  const camLow = camLevels.filter((c) => c <= camberDeg).pop() ?? 0;
+  const camHigh = camLevels.find((c) => c >= camberDeg) ?? 20;
+
+  const thkLow = thkLevels.filter((t) => t <= thicknessPct).pop() ?? 5;
+  const thkHigh = thkLevels.find((t) => t >= thicknessPct) ?? 20;
+
+  const cdLL = poly(alphaDeg, DRAG_POLYS[thkLow][camLow]);
+  const cdLH = poly(alphaDeg, DRAG_POLYS[thkHigh][camLow]);
+  const cdHL = poly(alphaDeg, DRAG_POLYS[thkLow][camHigh]);
+  const cdHH = poly(alphaDeg, DRAG_POLYS[thkHigh][camHigh]);
+
+  const cdCamLow = lerp(thicknessPct, thkLow, thkHigh, cdLL, cdLH);
+  const cdCamHigh = lerp(thicknessPct, thkLow, thkHigh, cdHL, cdHH);
+
+  let cd0 = lerp(camberDeg, camLow, camHigh, cdCamLow, cdCamHigh);
+
+  if (reynolds > 0) {
+    cd0 *= Math.pow(50000 / reynolds, 0.11);
+  }
+
   const induced = (cl * cl) / (PI * aspectRatio * efficiency);
 
   return cd0 + induced;
@@ -168,47 +260,6 @@ export function calculateDensity(pressure, tempTrop) {
 
 export function calculateDynamicPressure(velocity, density) {
   return 0.5 * density * velocity * velocity;
-}
-
-export function computeAerodynamics({
-  angleDeg,
-  camberPct,
-  thicknessPct,
-  velocity,
-  altitude,
-  chord,
-  span,
-  wingArea,
-}) {
-  // Flow properties
-  const rho = densitySlugFt3(altitude);
-  const V = velocity;
-  const q = 0.5 * rho * V * V; // dynamic pressure
-  const reynolds = reynoldsNumber(velocity, chord, altitude);
-
-  // Aerodynamics
-  const cl = liftCoefficient(angleDeg, camberPct);
-
-  const aspectRatio = wingArea > 0 ? (span * span) / wingArea : 0;
-
-  const cd0 = 0.01 + 0.002 * (thicknessPct / 12);
-  const e = 0.85; // Oswald efficiency factor
-  const cdInduced = (cl * cl) / (Math.PI * aspectRatio * e);
-  const cd = cd0 + cdInduced;
-
-  const lift = liftForce(q, wingArea, cl);
-  const drag = dragForce(q, wingArea, cd);
-
-  const liftOverDrag = drag === 0 || !isFinite(drag) ? 0 : lift / drag;
-
-  return {
-    lift,
-    drag,
-    cl,
-    cd,
-    reynolds,
-    liftOverDrag,
-  };
 }
 
 // -----------------------------------------------------------------------------
@@ -416,34 +467,6 @@ export function calculateLiftForce(
 }
 
 // ============================================================================
-// DRAG COEFFICIENT (POLYNOMIAL + RE + INDUCED)
-// ============================================================================
-
-// ✅ This replaces your *entire 400-line polynomial block safely
-export function calculateDragCoefficientModern({
-  camberDeg,
-  thicknessPct,
-  alphaDeg,
-  reynolds,
-  cl,
-  aspectRatio = 4.0,
-  efficiency = 0.85,
-}) {
-  // Baseline camber/thickness parasitic drag model
-  let cd0 = 0.01 + 0.002 * (thicknessPct / 12.0) + 0.0001 * Math.abs(camberDeg);
-
-  // Reynolds correction
-  if (reynolds > 0) {
-    cd0 *= Math.pow(50000.0 / reynolds, 0.11);
-  }
-
-  // Induced drag
-  const induced = (cl * cl) / (PI * aspectRatio * efficiency);
-
-  return cd0 + induced;
-}
-
-// ============================================================================
 // DRAG FORCE
 // ============================================================================
 
@@ -470,10 +493,6 @@ export function calculateViscosity(mu0, ts0) {
   return ((mu0 * 717.408) / (ts0 + 198.72)) * Math.pow(ts0 / 518.688, 1.5);
 }
 
-// ============================================================================
-// REYNOLDS NUMBER (FULL LEGACY MODEL)
-// ============================================================================
-
 // REPLACES: calculateReynolds()
 export function calculateReynolds({
   velocity,
@@ -487,18 +506,18 @@ export function calculateReynolds({
 }) {
   const hite = altitude / lconv;
 
-  // Temperature
+  // Temperature model
   let ts0;
   if (hite <= 36152.0) {
     ts0 = calculateTS0STroposphere(hite);
-  }
-  if (hite >= 36152.0 && hite <= 82345.0) {
+  } else {
     ts0 = calculateTS0Stratosphere();
   }
 
   // Viscosity
   const viscos = calculateViscosity(mu0, ts0);
 
+  // Reynolds
   let reynolds = 0;
 
   if (altitude <= 36000) {

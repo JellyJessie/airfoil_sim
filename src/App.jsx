@@ -9,7 +9,7 @@ import QuickControls from "./components/QuickControls.jsx";
 import { OutputTabs } from "./foilsim/OutputTabs.jsx";
 import PlotButtons from "./components/PlotButtons.jsx";
 import PlotControls from "./foilsim/PlotControls.jsx";
-import AnalysisPanel from "./foilsim/AnalysisPanel.jsx";
+import AnalysisPanel from "./components/AnalysisPanel.jsx";
 import InputTabs from "./foilsim/InputTabs.jsx";
 
 /**

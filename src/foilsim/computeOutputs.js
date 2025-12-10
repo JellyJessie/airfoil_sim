@@ -5,21 +5,29 @@
 
 import {
   dynamicPressure,
-  reynoldsNumber,
   liftCoefficient,
-  dragCoefficient,
   liftForce,
   dragForce,
   calculateLiftCoefficientJoukowski,
   calculateLiftForce,
-  calculateDragCoefficientModern,
+  calculateDragCoefficient,
   calculateDragForce,
   calculateReynolds,
   calculateDrag,
+  densitySlugFt3,
+  calculateQ0T,
+  calculateQ0S,
+  getDensityFromAltitude,
 } from "../physics/foilPhysics";
 
 // Optional: if you still want enum-style units/env elsewhere
 import { UnitSystem, Environment } from "../physics/shapeCore.js";
+
+import {
+  buildLiftDragBarData,
+  calculateLiftToDrag,
+} from "../physics/plotHelpers";
+import { generateFlowField } from "../physics/genFlowField";
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -123,7 +131,20 @@ export function computeOutputs(state) {
   // --- flow properties -------------------------------------------------------
 
   const q = dynamicPressure(velocity, altitude); // q = 0.5 rho V^2
-  const reynolds = reynoldsNumber(velocity, chord, altitude);
+  const vconv = 0.6818;
+  const densityTrop = densitySlugFt3(altitude);
+  const densityStrat = densityTrop * 0.9;
+
+  const q0T = calculateQ0T(velocity, vconv, altitude, densityTrop);
+  const q0S = calculateQ0S(velocity, vconv, altitude, densityStrat);
+
+  const reynolds = calculateReynolds({
+    velocity,
+    altitude,
+    chord,
+    densityTrop,
+    densityStrat,
+  });
 
   // --- aerodynamics ----------------------------------------------------------
 
@@ -132,18 +153,6 @@ export function computeOutputs(state) {
 
   const aspectRatio = wingArea > 0 ? (span * span) / wingArea : 0;
 
-  const cd = dragCoefficient({
-    cl,
-    reynolds,
-    thicknessPct,
-    aspectRatio: aspectRatio || 4,
-  });
-
-  const lift = liftForce(q, wingArea, cl);
-  const drag = dragForce(q, wingArea, cd);
-
-  const liftOverDrag = drag !== 0 && isFinite(drag) ? lift / drag : 0;
-
   // --- CL–alpha plot sweep ---------------------------------------------------
 
   const clAlpha = buildAlphaSweep({
@@ -151,6 +160,57 @@ export function computeOutputs(state) {
     alphaMin: -10,
     alphaMax: 20,
     step: 1,
+  });
+
+  // Drag coefficient
+  const cd = calculateDragCoefficient({
+    camberDeg: 7.5,
+    thicknessPct: 12,
+    alphaDeg: 8,
+    reynolds: 80000,
+    cl: 0.9,
+    aspectRatio: 4.0,
+    efficiency: 0.85,
+  });
+
+  // Forces
+  const lift = calculateLiftForce(
+    velocity,
+    altitude,
+    wingArea,
+    vconv,
+    q0T,
+    q0S,
+    cl
+  );
+
+  const drag = calculateDragForce(
+    velocity,
+    altitude,
+    wingArea,
+    vconv,
+    q0T,
+    q0S,
+    cd
+  );
+
+  const liftOverDrag = drag !== 0 ? lift / drag : 0;
+  const barData = buildLiftDragBarData(lift, drag);
+  const ld = calculateLiftToDrag(lift, drag);
+  // ================= FLOW FIELD SAFETY DEFAULTS =================
+
+  // These prevent genFlowField crashes if shape system not wired yet
+  const xcval = 0; // center x
+  const ycval = 0; // center y
+  const rval = 1; // cylinder radius
+  const gamval = 0; // circulation
+
+  const flowField = generateFlowField({
+    alphaDeg: angleDeg,
+    xcval,
+    ycval,
+    rval,
+    gamval,
   });
 
   // --- structured output for panels -----------------------------------------
@@ -177,7 +237,7 @@ export function computeOutputs(state) {
     // environment (minimal, can be extended)
     velocity,
     altitude,
-    q,
+    q0: altitude <= 36000 ? q0T : q0S,
 
     // plot panel
     plots: {
@@ -195,46 +255,19 @@ export function computeOutputs(state) {
     environment,
   };
 }
-
 /*
+export function plotGraph({ lift, drag }, plotRef) {
+  if (!plotRef?.current) return;
 
-// Drag coefficient
-const cd = calculateDragCoefficientModern({
-  camberDeg: camberPct,
-  thicknessPct,
-  alphaDeg: angleDeg,
-  reynolds,
-  cl,
-});
+  const data = [
+    {
+      x: ["Lift", "Drag"],
+      y: [lift, drag],
+      type: "bar",
+    },
+  ];
 
-// Forces
-const lift = calculateLiftForce(
-  velocity,
-  altitude,
-  wingArea,
-  vconv,
-  q0T,
-  q0S,
-  cl
-);
-
-const drag = calculateDragForce(
-  velocity,
-  altitude,
-  wingArea,
-  vconv,
-  q0T,
-  q0S,
-  cd
-);
-
-const reynolds = calculateReynolds({
-  velocity,
-  altitude,
-  chord,
-  densityTrop,
-  densityStrat,
-});
-
+  Plotly.newPlot(plotRef.current, data);
+}
 
 */
