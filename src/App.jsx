@@ -1,16 +1,17 @@
 // src/App.jsx
 import React, { useState } from "react";
 import { FoilSimProvider, useFoilSim } from "./store/FoilSimContext.jsx";
-import { UnitSystem, Environment } from "./physics/shapeCore.js";
 
 import DesignApp from "./design/DesignApp.jsx";
 import Design3D from "./design/Design3D.jsx";
 import QuickControls from "./components/QuickControls.jsx";
 import { OutputTabs } from "./foilsim/OutputTabs.jsx";
 import PlotButtons from "./components/PlotButtons.jsx";
-import PlotControls from "./foilsim/PlotControls.jsx";
+import SAWDPlotControls from "./foilsim/PlotControls.jsx";
 import AnalysisPanel from "./components/AnalysisPanel.jsx";
 import InputTabs from "./foilsim/InputTabs.jsx";
+import FlowCanvas from "./components/FlowCanvas.jsx";
+import { Environment, UnitSystem } from "./components/shape.js";
 
 /**
  * Simple angle-of-attack slider using FoilSim context
@@ -147,8 +148,6 @@ function FoilSimPanel() {
         <PlotButtons visible={true} />
       </section>
 
-      {/*<PlotControls />
-      <PlotPanel /> */}
       <section>
         {outputButton === 4 && (
           <>
@@ -164,7 +163,7 @@ function FoilSimPanel() {
 
             {shapeSelect <= 3 && (
               <>
-                <PlotControls />{" "}
+                <SAWDPlotControls />{" "}
                 {/* Speed / Altitude / Wing / Density row we wrote */}
                 {/* Later: add Angle / Camber / Thickness row */}
               </>
@@ -219,6 +218,8 @@ export default function App() {
           <h2>FoilSim</h2>
           <InputTabs />
         </div>
+
+        <FlowCanvas />
 
         {/* Right side: NASA-style Gage/Geometry/Data/Plot outputs */}
         <div className="foilsim-right">

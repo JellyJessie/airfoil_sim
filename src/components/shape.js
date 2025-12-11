@@ -1,13 +1,40 @@
-// src/core/shape.js
-import {
-  velocityConv,
-  lengthConv,
-  forceConv,
-  Environment,
-  UnitSystem,
-} from "../physics/shapeCore.js";
 import { getAtmosphere } from "./environment.js";
 
+export const UnitSystem = Object.freeze({
+  IMPERIAL: "imperial", // original "english"
+  METRIC: "metric",
+});
+
+export const Environment = Object.freeze({
+  EARTH: "earth",
+  MARS: "mars",
+  MERCURY: "mercury",
+  VENUS: "venus",
+});
+
+export function velocityConv(units) {
+  if (units === UnitSystem.ENGLISH) return 0.6818;
+  if (units === UnitSystem.METRIC) return 1.097;
+  throw new Error(`Unknown units for velocityConv: ${units}`);
+}
+
+export function lengthConv(units) {
+  if (units === UnitSystem.ENGLISH) return 1.0;
+  if (units === UnitSystem.METRIC) return 0.3048;
+  throw new Error(`Unknown units for lengthConv: ${units}`);
+}
+
+export function forceConv(units) {
+  if (units === UnitSystem.ENGLISH) return 1.0;
+  if (units === UnitSystem.METRIC) return 4.448;
+  throw new Error(`Unknown units for forceConv: ${units}`);
+}
+
+export function pressureConv(units) {
+  if (units === UnitSystem.ENGLISH) return 14.7;
+  if (units === UnitSystem.METRIC) return 101.3;
+  throw new Error(`Unknown units for pressureConv: ${units}`);
+}
 export class Shape {
   constructor({
     angleDeg,

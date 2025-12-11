@@ -274,47 +274,49 @@ export function calculateQ0S(velocity, vconv, altitude) {
   const densityStrat = calculateDensityStratosphere(altitude);
   return (0.5 * densityStrat * velocity * velocity) / (vconv * vconv);
 }
+*/
 
-// -----------------------------------------------------------------------------
-// Degree → Radian Conversion
+// ============================================================================
+// DEGREE → RADIAN CONVERSION
+// ============================================================================
 
+// REPLACES: getConvdr()
 export function getConvdr() {
   return Math.PI / 180;
 }
-// -----------------------------------------------------------------------------
-// Joukowski Geometry Helpers (Camber + Thickness Based)
-// These replace getxcVal, getycVal, getrVal, getBeta
-// -----------------------------------------------------------------------------
+
+// ============================================================================
+// JOUKOWSKI AIRFOIL GEOMETRY
+// ============================================================================
 
 // REPLACES: getycVal()
-// NOTE: camberPct = getCamber() from React state
-export function getycValFromCamber(camberPct) {
-  const camber = camberPct / 25.0;
-  return camber / 2.0;
+export function getycVal(camberPct) {
+  return camberPct / 25.0 / 2.0;
 }
+
 // REPLACES: getrVal()
 export function getrVal(thicknessPct, camberPct) {
   const thickness = thicknessPct / 25.0;
-  const ycval = getycValFromCamber(camberPct);
+  const ycval = getycVal(camberPct);
 
   return (
     thickness / 4.0 +
     Math.sqrt((thickness * thickness) / 16.0 + ycval * ycval + 1.0)
   );
 }
-*/
+
 // REPLACES: getxcVal()
 export function getxcVal(thicknessPct, camberPct) {
-  const ycval = getycValFromCamber(camberPct);
-  const rval = getrValFromThickness(thicknessPct, camberPct);
+  const ycval = getycVal(camberPct);
+  const rval = getrVal(thicknessPct, camberPct);
 
   return 1.0 - Math.sqrt(rval * rval - ycval * ycval);
 }
 
 // REPLACES: getBeta()
 export function getBeta(thicknessPct, camberPct) {
-  const rval = getrValFromThickness(thicknessPct, camberPct);
-  const ycval = getycValFromCamber(camberPct);
+  const rval = getrVal(thicknessPct, camberPct);
+  const ycval = getycVal(camberPct);
   const convdr = getConvdr();
 
   return Math.asin(ycval / rval) / convdr;
@@ -348,47 +350,18 @@ export function calculateQ0S(velocity, vconv, altitude, densityStrat) {
   return (0.5 * densityStrat * velocity * velocity) / (vconv * vconv);
 }
 
-// ============================================================================
-// DEGREE → RADIAN CONVERSION
-// ============================================================================
-
-// REPLACES: getConvdr()
-export function getConvdr() {
-  return Math.PI / 180;
-}
-
-// ============================================================================
-// JOUKOWSKI AIRFOIL GEOMETRY
-// ============================================================================
-
-// REPLACES: getycVal()
-export function getycVal(camberPct) {
-  return camberPct / 25.0 / 2.0;
-}
-
-// REPLACES: getrVal()
-export function getrVal(thicknessPct, camberPct) {
-  const thickness = thicknessPct / 25.0;
-  const ycval = getycValFromCamber(camberPct);
-
-  return (
-    thickness / 4.0 +
-    Math.sqrt((thickness * thickness) / 16.0 + ycval * ycval + 1.0)
-  );
-}
-
 // REPLACES: getxcVal()
 export function getxcValFromGeom(thicknessPct, camberPct) {
-  const ycval = getycValFromCamber(camberPct);
-  const rval = getrValFromThickness(thicknessPct, camberPct);
+  const ycval = getycVal(camberPct);
+  const rval = getrVal(thicknessPct, camberPct);
 
   return 1.0 - Math.sqrt(rval * rval - ycval * ycval);
 }
 
 // REPLACES: getBeta()
 export function getBetaFromGeom(thicknessPct, camberPct) {
-  const rval = getrValFromThickness(thicknessPct, camberPct);
-  const ycval = getycValFromCamber(camberPct);
+  const rval = getrVal(thicknessPct, camberPct);
+  const ycval = getycVal(camberPct);
   const convdr = getConvdr();
 
   return Math.asin(ycval / rval) / convdr;
@@ -402,7 +375,7 @@ export function getBetaFromGeom(thicknessPct, camberPct) {
 export function getGamVal(angleDeg, thicknessPct, camberPct) {
   const beta = getBetaFromGeom(thicknessPct, camberPct);
   const convdr = getConvdr();
-  const rval = getrValFromThickness(thicknessPct, camberPct);
+  const rval = getrVal(thicknessPct, camberPct);
 
   return 2.0 * rval * Math.sin((angleDeg + beta) * convdr);
 }
@@ -418,8 +391,8 @@ export function calculateLiftCoefficientJoukowski(
   thicknessPct
 ) {
   const convdr = getConvdr();
-  const ycval = getycValFromCamber(camberPct);
-  const rval = getrValFromThickness(thicknessPct, camberPct);
+  const ycval = getycVal(camberPct);
+  const rval = getrVal(thicknessPct, camberPct);
   const xcval = getxcValFromGeom(thicknessPct, camberPct);
   const beta = getBetaFromGeom(thicknessPct, camberPct);
   const gamval = getGamVal(angleDeg, thicknessPct, camberPct);

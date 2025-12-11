@@ -1,7 +1,6 @@
 // src/store/FoilSimContext.jsx
 import React, { createContext, useContext, useReducer, useMemo } from "react";
-import { UnitSystem, Environment } from "../physics/shapeCore";
-import { Shape } from "../components/shape.js";
+import { UnitSystem, Environment, Shape } from "../components/shape.js";
 import { computeAirfoil } from "../components/foilSimCore.js";
 import { computeOutputs } from "../foilsim/computeOutputs";
 

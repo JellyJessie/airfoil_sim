@@ -54,6 +54,21 @@ export default function AnalysisPanel() {
   const cd = outputs?.cd?.toFixed(5) ?? "--";
   const ld = outputs?.liftOverDrag?.toFixed(3) ?? "--";
   const reynolds = outputs?.reynolds ? outputs.reynolds.toExponential(3) : "--";
+  const optimalLD = outputs?.optimalLD?.toFixed(2) ?? "--";
+  const optimalAlpha = outputs?.optimalAlpha?.toFixed(1) ?? "--";
+  const stallAlpha = outputs?.stallAlpha?.toFixed(1) ?? "--";
+  const isStalled = outputs?.isStalled ?? false;
+
+  const cd0 = outputs?.cd0 ?? null;
+  const cdi = outputs?.cdi ?? null;
+
+  const cdTotal = cd0 !== null && cdi !== null ? cd0 + cdi : null;
+
+  const cd0Pct = cdTotal && cdTotal > 0 ? (cd0 / cdTotal) * 100 : 0;
+  const cdiPct = cdTotal && cdTotal > 0 ? (cdi / cdTotal) * 100 : 0;
+
+  const cd0Label = cd0 !== null ? cd0.toFixed(5) : "--";
+  const cdiLabel = cdi !== null ? cdi.toFixed(5) : "--";
 
   return (
     <div className="af-panel">
@@ -147,6 +162,89 @@ export default function AnalysisPanel() {
       <div style={{ marginTop: 20 }}>
         <span style={{ fontWeight: "bold" }}>Performance:</span>
         <ValueBadge label="L/D" value={ld} />
+      </div>
+
+      {/* ================= DRAG BREAKDOWN ================= */}
+      <div style={{ marginTop: 20 }}>
+        <h3 style={{ marginBottom: 8 }}>Drag Breakdown</h3>
+
+        {/* Numeric badges */}
+        <ValueBadge label="Cd₀ (parasitic)" value={cd0Label} />
+        <ValueBadge label="Cdi (induced)" value={cdiLabel} />
+
+        {/* Bar visualization */}
+        <div
+          style={{
+            marginTop: 10,
+            width: "100%",
+            height: 18,
+            borderRadius: 9,
+            overflow: "hidden",
+            border: "1px solid #ccc",
+            display: "flex",
+            background: "#f9f9f9",
+          }}
+        >
+          {/* Cd0 segment */}
+          <div
+            style={{
+              width: `${cd0Pct}%`,
+              background: "#cce5ff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 10,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {cdTotal ? `${cd0Pct.toFixed(0)}% Cd₀` : ""}
+          </div>
+
+          {/* Cdi segment */}
+          <div
+            style={{
+              width: `${cdiPct}%`,
+              background: "#ffd6cc",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 10,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {cdTotal ? `${cdiPct.toFixed(0)}% Cdi` : ""}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 6, fontSize: 11, color: "#555" }}>
+          Total Cd = {cd}
+        </div>
+      </div>
+
+      {/* ================= PERFORMANCE STATUS ================= */}
+      <div
+        style={{ marginTop: 24, paddingTop: 12, borderTop: "1px solid #ccc" }}
+      >
+        <h3 style={{ marginBottom: 8 }}>Performance Status</h3>
+
+        <ValueBadge label="Optimal L/D" value={optimalLD} />
+        <ValueBadge label="Optimal α" value={`${optimalAlpha}°`} />
+
+        {stallAlpha && <ValueBadge label="Stall α" value={`${stallAlpha}°`} />}
+
+        <span
+          style={{
+            marginLeft: 12,
+            padding: "4px 12px",
+            fontWeight: "bold",
+            color: isStalled ? "white" : "#333",
+            background: isStalled ? "red" : "#d4f7d4",
+            borderRadius: 6,
+            animation: isStalled ? "blink 1s infinite" : "none",
+          }}
+        >
+          {isStalled ? "⚠ STALL" : "✅ Stable"}
+        </span>
       </div>
     </div>
   );

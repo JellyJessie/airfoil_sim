@@ -166,12 +166,12 @@ export class Airfoil extends Shape {
     return lift;
   }
 
-  getDrag() {
+  () {
     const v = this.getVelocity();
     if (v === 0) return 0;
 
     const q0 = this.getDynamicPressure();
-    const cd = this.getDragCoefficient();
+    const cd = this.Coefficient();
     const s = this.getWingArea();
     const lconv = this.getLengthConv();
     const fconv = this.getForceConv();

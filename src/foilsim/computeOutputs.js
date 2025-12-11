@@ -17,17 +17,14 @@ import {
   densitySlugFt3,
   calculateQ0T,
   calculateQ0S,
-  getDensityFromAltitude,
 } from "../physics/foilPhysics";
-
-// Optional: if you still want enum-style units/env elsewhere
-import { UnitSystem, Environment } from "../physics/shapeCore.js";
 
 import {
   buildLiftDragBarData,
   calculateLiftToDrag,
 } from "../physics/plotHelpers";
-import { generateFlowField } from "../physics/genFlowField";
+import { generateFlowField } from "../physics/flowField.js";
+import { Environment, UnitSystem } from "../components/shape.js";
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -114,8 +111,6 @@ export function computeOutputs(state) {
     // aero options
     liftAnalisis, // 1 = stall model, 2 = ideal
     ar,
-    induced,
-    reCorrection,
 
     // rotating body (future extension)
     radius,
@@ -214,6 +209,75 @@ export function computeOutputs(state) {
   });
 
   // --- structured output for panels -----------------------------------------
+  // ================= PERFORMANCE ANALYSIS =================
+
+  // Build Cd(α) and L/D(α)
+  const cdAlpha = [];
+  const ldAlpha = [];
+  // --- drag breakdown: Cd0 (parasitic) + Cdi (induced) -----------------------
+  const { induced, reCorrection } = state; // make sure these exist in state
+
+  // Baseline parasitic drag (same as in your faithful model)
+  let cd0 = 0.01 + 0.002 * (thicknessPct / 12.0) + 0.0001 * Math.abs(camberPct);
+
+  // Optional Reynolds correction
+  if (reCorrection && reynolds > 0) {
+    cd0 *= Math.pow(50000 / reynolds, 0.11);
+  }
+
+  // Induced drag term
+  let cdi = 0;
+  if (induced) {
+    const efficiency = 0.85;
+    cdi = (cl * cl) / (Math.PI * aspectRatio * efficiency);
+  }
+
+  // (optional) If you want, you can also recompute cd_total = cd0 + cdi
+  // and compare to your existing `cd` for debugging.
+
+  let optimalLD = 0;
+  let optimalAlpha = 0;
+  let stallAlpha = null;
+
+  // Detect stall by dCl/dα turning negative
+  for (let i = 1; i < clAlpha.alphas.length; i++) {
+    const alphaPrev = clAlpha.alphas[i - 1];
+    const alpha = clAlpha.alphas[i];
+
+    const dCl = clAlpha.cls[i] - clAlpha.cls[i - 1];
+
+    // Stall detection (first slope drop)
+    if (stallAlpha === null && dCl < 0) {
+      stallAlpha = alphaPrev;
+    }
+  }
+
+  // Compute L/D curve
+  for (let i = 0; i < clAlpha.alphas.length; i++) {
+    const cl_i = clAlpha.cls[i];
+
+    const cd_i = calculateDragCoefficient({
+      camberDeg: camberPct,
+      thicknessPct,
+      alphaDeg: clAlpha.alphas[i],
+      reynolds,
+      cl: cl_i,
+      aspectRatio,
+    });
+
+    cdAlpha.push(cd_i);
+
+    const ld_i = cd_i !== 0 ? cl_i / cd_i : 0;
+    ldAlpha.push(ld_i);
+
+    if (ld_i > optimalLD) {
+      optimalLD = ld_i;
+      optimalAlpha = clAlpha.alphas[i];
+    }
+  }
+
+  // Current stall state
+  const isStalled = stallAlpha !== null && angleDeg >= stallAlpha;
 
   return {
     // geometry panel
@@ -234,6 +298,10 @@ export function computeOutputs(state) {
     reynolds,
     liftOverDrag,
 
+    // ✅ NEW: drag breakdown
+    cd0, // parasitic
+    cdi, // induced
+
     // environment (minimal, can be extended)
     velocity,
     altitude,
@@ -241,7 +309,9 @@ export function computeOutputs(state) {
 
     // plot panel
     plots: {
-      clAlpha, // { alphas: [...], cls: [...] }
+      clAlpha,
+      cdAlpha, // ✅ NEW
+      ldAlpha, // ✅ NEW
     },
 
     // future (optional)

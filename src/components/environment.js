@@ -1,6 +1,6 @@
-// src/core/environment.js
-import { Environment, lengthConv, velocityConv } from "../physics/shapeCore.js";
+import { Environment, lengthConv, velocityConv } from "./shape";
 
+// src/core/environment.js
 const MU0_AIR = 0.000000362;
 const MU0_WATER = 0.0000272;
 
