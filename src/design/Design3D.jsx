@@ -1,56 +1,55 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// src/design/Design3D.jsx
+import React, { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-function deg2rad(d) {
-  return (d * Math.PI) / 180;
-}
-function rotate([x, y], a, pivot = [0, 0]) {
-  const s = Math.sin(a),
-    c = Math.cos(a);
-  const xr = x - pivot[0],
-    yr = y - pivot[1];
-  return [xr * c - yr * s + pivot[0], xr * s + yr * c + pivot[1]];
+// ---- helpers (unchanged from your file) ----
+const deg2rad = (d) => (d * Math.PI) / 180;
+
+function rotate([x, y], ang, [cx, cy]) {
+  const s = Math.sin(ang);
+  const c = Math.cos(ang);
+  const dx = x - cx;
+  const dy = y - cy;
+  return [cx + dx * c - dy * s, cy + dx * s + dy * c];
 }
 
 function naca4({ m, p, t, c = 1, n = 200 }) {
-  const x = new Array(n + 1).fill(0).map((_, i) => (c * i) / n);
+  const x = new Array(n + 1).fill(0).map((_, i) => {
+    const beta = (Math.PI * i) / n;
+    return (c / 2) * (1 - Math.cos(beta));
+  });
+
   const yt = x.map((xi) => {
     const xc = xi / c;
     return (
       5 *
       t *
       c *
-      (0.2969 * Math.sqrt(Math.max(xc, 1e-9)) -
+      (0.2969 * Math.sqrt(xc) -
         0.126 * xc -
-        0.3516 * xc ** 2 +
-        0.2843 * xc ** 3 -
-        0.1015 * xc ** 4)
+        0.3516 * xc * xc +
+        0.2843 * xc * xc * xc -
+        0.1015 * xc * xc * xc * xc)
     );
   });
+
   const yc = x.map((xi) => {
     const xc = xi / c;
-    if (p <= 0) {
-      return 0;
-    }
-    if (xc < p) {
-      return (m * c * (2 * p * xc - xc * xc)) / (p * p);
-    }
-    return (m * c * (1 - 2 * p + 2 * p * xc - xc * xc)) / ((1 - p) * (1 - p));
+    if (p <= 0) return 0;
+    if (xc < p) return ((m * (2 * p * xc - xc * xc)) / (p * p)) * c;
+    return ((m * (1 - 2 * p + 2 * p * xc - xc * xc)) / ((1 - p) * (1 - p))) * c;
   });
+
   const dyc = x.map((xi) => {
     const xc = xi / c;
-    if (p <= 0) {
-      return 0;
-    }
-    if (xc < p) {
-      return (2 * m * (p - xc)) / (p * p);
-    }
+    if (p <= 0) return 0;
+    if (xc < p) return (2 * m * (p - xc)) / (p * p);
     return (2 * m * (p - xc)) / ((1 - p) * (1 - p));
   });
 
-  const upper = [],
-    lower = [];
+  const upper = [];
+  const lower = [];
   for (let i = 0; i <= n; i++) {
     const theta = Math.atan(dyc[i] || 0);
     const xu = x[i] - yt[i] * Math.sin(theta);
@@ -72,12 +71,15 @@ function buildWingGeometry({
 }) {
   const geom = new THREE.BufferGeometry();
   const halfSpan = span / 2;
+
   const secYs = new Array(sections)
     .fill(0)
     .map((_, i) => (i / (sections - 1)) * halfSpan);
-  const verts = [],
-    uvs = [],
-    idx = [];
+
+  const verts = [];
+  const uvs = [];
+  const idx = [];
+
   const n = pts2d.length;
   const rootChord = 1.0;
   const pivotFrac = 0.25;
@@ -87,6 +89,7 @@ function buildWingGeometry({
     const chord = rootChord * (1 - (1 - taper) * frac);
     const twist = deg2rad(twistTipDeg * frac);
     const pivot = [pivotFrac * chord, 0];
+
     return pts2d.map(([x, y2]) => {
       const xs = x * chord;
       const ys = y2 * chord;
@@ -124,24 +127,26 @@ function buildWingGeometry({
   return geom;
 }
 
-export default function Design3D() {
-  const mountRef = useRef(null);
+// ------------------------------------------------------------------
 
-  const [chord, setChord] = useState(1.0);
-  const [t, setT] = useState(0.12);
-  const [m, setM] = useState(0.02);
-  const [p, setP] = useState(0.4);
-  const [span, setSpan] = useState(2.0);
-  const [taper, setTaper] = useState(1);
-  const [twist, setTwist] = useState(0);
-  //  const [taper, setTaper] = useState(0.6);
-  //  const [twist, setTwist] = useState(5);
+export default function Design3D({
+  chord = 1.0,
+  t = 0.12,
+  m = 0.02,
+  p = 0.4,
+  span = 2.0,
+  taper = 1,
+  twist = 0,
+  height = 520,
+}) {
+  const mountRef = useRef(null);
 
   const base2d = useMemo(() => naca4({ m, p, t, c: 1, n: 300 }), [m, p, t]);
   const scaled2d = useMemo(
     () => base2d.map(([x, y]) => [x * chord, y * chord]),
     [base2d, chord]
   );
+
   const geom = useMemo(
     () =>
       buildWingGeometry({
@@ -156,21 +161,29 @@ export default function Design3D() {
 
   useEffect(() => {
     const mount = mountRef.current;
+    if (!mount) return;
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf5f7fb);
-    const camera = new THREE.PerspectiveCamera(
-      50,
-      mount.clientWidth / mount.clientHeight,
-      0.01,
-      1000
-    );
+
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
     camera.position.set(2.8, 1.3, 3.2);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(mount.clientWidth, mount.clientHeight);
-    mount.appendChild(renderer.domElement);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
-    const controls = new OrbitControls(camera, renderer.domElement);
+    // Make canvas NOT affect layout (prevents ResizeObserver feedback loops)
+    const canvas = renderer.domElement;
+    canvas.style.position = "absolute";
+    canvas.style.inset = "0";
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    canvas.style.display = "block";
+
+    // Ensure the mount is the sizing box
+    mount.style.position = "relative";
+
+    const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
 
     const grid = new THREE.GridHelper(10, 20, 0x999999, 0xdddddd);
@@ -188,20 +201,29 @@ export default function Design3D() {
       roughness: 0.5,
       side: THREE.DoubleSide,
     });
+
     const mesh = new THREE.Mesh(geom, material);
     scene.add(mesh);
 
-    const onResize = () => {
-      const w = mount.clientWidth,
-        h = mount.clientHeight;
-      camera.aspect = w / h;
+    const resize = () => {
+      const { width, height } = mount.getBoundingClientRect();
+      if (!width || !height) return;
+
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+
+      // CRITICAL: updateStyle=false so canvas style doesn't change => no loop
+      renderer.setSize(width, height, false);
     };
-    const obs = new ResizeObserver(onResize);
+
+    const obs = new ResizeObserver(resize);
+
+    // Attach only after DOM is ready
+    mount.appendChild(canvas);
+    resize();
     obs.observe(mount);
 
-    let raf;
+    let raf = 0;
     const tick = () => {
       raf = requestAnimationFrame(tick);
       controls.update();
@@ -212,99 +234,26 @@ export default function Design3D() {
     return () => {
       cancelAnimationFrame(raf);
       obs.disconnect();
-      mount.removeChild(renderer.domElement);
+      controls.dispose();
+      scene.remove(mesh);
+      material.dispose();
       renderer.dispose();
       geom.dispose();
+      if (canvas.parentNode === mount) mount.removeChild(canvas);
     };
   }, [geom]);
 
+  // ✅ graph-only output (no title, no inputs)
   return (
-    <div className="af-panel" style={{ maxWidth: 1000 }}>
-      <h2 className="af-title">3D View</h2>
-      <div
-        style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 16 }}
-      >
-        <div>
-          <div className="af-field">
-            <label>Chord (m)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={chord}
-              onChange={(e) => setChord(parseFloat(e.target.value || "0"))}
-            />
-          </div>
-          <div className="af-field">
-            <label>Thickness ratio (t)</label>
-            <input
-              type="number"
-              step="0.005"
-              value={t}
-              onChange={(e) => setT(parseFloat(e.target.value || "0"))}
-            />
-          </div>
-          <div className="af-field">
-            <label>Max camber (m)</label>
-            <input
-              type="number"
-              step="0.005"
-              value={m}
-              onChange={(e) => setM(parseFloat(e.target.value || "0"))}
-            />
-          </div>
-          <div className="af-field">
-            <label>Camber position (p)</label>
-            <input
-              type="number"
-              step="0.05"
-              value={p}
-              onChange={(e) => setP(parseFloat(e.target.value || "0"))}
-            />
-          </div>
-          <div className="af-field">
-            <label>Span (m)</label>
-            <input
-              type="number"
-              step="0.1"
-              value={span}
-              onChange={(e) => setSpan(parseFloat(e.target.value || "0"))}
-            />
-          </div>
-          <p className="af-note">Orbit with mouse drag • Zoom with wheel</p>
-        </div>
-        <div
-          ref={mountRef}
-          style={{
-            width: "100%",
-            height: "520px",
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            overflow: "hidden",
-          }}
-        />
-      </div>
-    </div>
+    <div
+      ref={mountRef}
+      style={{
+        width: "100%",
+        height: `${height}px`,
+        border: "1px solid #ddd",
+        borderRadius: "12px",
+        overflow: "hidden",
+      }}
+    />
   );
 }
-
-/*
-
-          <div className="af-field">
-            <label>Taper ratio</label>
-            <input
-              type="number"
-              step="0.05"
-              value={taper}
-              onChange={(e) => setTaper(parseFloat(e.target.value || "0"))}
-            />
-          </div>
-          <div className="af-field">
-            <label>Tip twist (°)</label>
-            <input
-              type="number"
-              step="0.5"
-              value={twist}
-              onChange={(e) => setTwist(parseFloat(e.target.value || "0"))}
-            />
-          </div>
-*/

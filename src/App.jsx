@@ -47,7 +47,7 @@ function AngleControl() {
 }
 
 /**
- * Root app with tabs + FoilSim panel.
+ * Root app
  * This is the ONLY default export. No createRoot or mount() here.
  */
 function AppInner() {
@@ -64,8 +64,6 @@ function AppInner() {
       </div>
 
       {/* TAB CONTENT */}
-      {tab === "design" && <DesignApp />}
-      {tab === "three" && <Design3D />}
       {tab === "quick" && <QuickControls />}
       {tab === "analysis" && <AnalysisPanel />}
 
@@ -73,7 +71,7 @@ function AppInner() {
       <hr style={{ margin: "16px 0" }} />
 
       {/* Context-powered controls */}
-      <AngleControl />
+
       <FoilSimPanel />
     </div>
   );

@@ -8,7 +8,7 @@ const FoilSimContext = createContext(null);
 
 const initialState = {
   angleDeg: 5,
-  camberPct: 0,
+  camberPct: 0.02,
   thicknessPct: 12.5,
   velocity: 30,
   altitude: 0,
@@ -114,6 +114,35 @@ function foilSimReducer(state, action) {
 
     case "SET_RE_CORRECTION":
       return { ...state, reCorrection: action.value }; // true / false
+
+    case "RESET": {
+      // Reset to initial defaults
+      return { ...initialState };
+    }
+
+    case "IMPORT_STATE": {
+      // Merge imported values, but keep shape of state stable
+      const next = { ...state, ...(action.payload || {}) };
+
+      // Optional: harden numeric fields (avoid NaN)
+      const numKeys = [
+        "angleDeg",
+        "camberPct",
+        "thicknessPct",
+        "velocity",
+        "altitude",
+        "wingArea",
+        "chord",
+        "span",
+        "radius",
+        "spin",
+      ];
+      for (const k of numKeys) {
+        if (k in next) next[k] = Number(next[k]) || 0;
+      }
+
+      return next;
+    }
 
     default:
       return state;
