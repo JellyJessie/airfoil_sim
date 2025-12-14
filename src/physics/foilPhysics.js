@@ -99,7 +99,42 @@ export function liftCoefficient(alphaDeg, camberPct = 0) {
 
   return cd0 + induced;
 }*/
+export function calculateDragCoefficient({
+  camberDeg,
+  thicknessPct,
+  alphaDeg,
+  reynolds,
+  cl,
+  aspectRatio = 4.0,
+  efficiency = 0.85,
+}) {
+  const camLevels = [0, 5, 10, 15, 20];
+  const thkLevels = [5, 10, 15, 20];
 
+  const camLow = camLevels.filter((c) => c <= camberDeg).pop() ?? 0;
+  const camHigh = camLevels.find((c) => c >= camberDeg) ?? 20;
+
+  const thkLow = thkLevels.filter((t) => t <= thicknessPct).pop() ?? 5;
+  const thkHigh = thkLevels.find((t) => t >= thicknessPct) ?? 20;
+
+  const cdLL = poly(alphaDeg, DRAG_POLYS[thkLow][camLow]);
+  const cdLH = poly(alphaDeg, DRAG_POLYS[thkHigh][camLow]);
+  const cdHL = poly(alphaDeg, DRAG_POLYS[thkLow][camHigh]);
+  const cdHH = poly(alphaDeg, DRAG_POLYS[thkHigh][camHigh]);
+
+  const cdCamLow = lerp(thicknessPct, thkLow, thkHigh, cdLL, cdLH);
+  const cdCamHigh = lerp(thicknessPct, thkLow, thkHigh, cdHL, cdHH);
+
+  let cd0 = lerp(camberDeg, camLow, camHigh, cdCamLow, cdCamHigh);
+
+  if (reynolds > 0) {
+    cd0 *= Math.pow(50000 / reynolds, 0.11);
+  }
+
+  const induced = (cl * cl) / (PI * aspectRatio * efficiency);
+
+  return cd0 + induced;
+}
 /* ============================
    Polynomial evaluation
 ============================ */
@@ -162,42 +197,6 @@ function lerp(x, x0, x1, y0, y1) {
 /* ============================
    Main Physically Faithful Model
 ============================ */
-export function calculateDragCoefficient({
-  camberDeg,
-  thicknessPct,
-  alphaDeg,
-  reynolds,
-  cl,
-  aspectRatio = 4.0,
-  efficiency = 0.85,
-}) {
-  const camLevels = [0, 5, 10, 15, 20];
-  const thkLevels = [5, 10, 15, 20];
-
-  const camLow = camLevels.filter((c) => c <= camberDeg).pop() ?? 0;
-  const camHigh = camLevels.find((c) => c >= camberDeg) ?? 20;
-
-  const thkLow = thkLevels.filter((t) => t <= thicknessPct).pop() ?? 5;
-  const thkHigh = thkLevels.find((t) => t >= thicknessPct) ?? 20;
-
-  const cdLL = poly(alphaDeg, DRAG_POLYS[thkLow][camLow]);
-  const cdLH = poly(alphaDeg, DRAG_POLYS[thkHigh][camLow]);
-  const cdHL = poly(alphaDeg, DRAG_POLYS[thkLow][camHigh]);
-  const cdHH = poly(alphaDeg, DRAG_POLYS[thkHigh][camHigh]);
-
-  const cdCamLow = lerp(thicknessPct, thkLow, thkHigh, cdLL, cdLH);
-  const cdCamHigh = lerp(thicknessPct, thkLow, thkHigh, cdHL, cdHH);
-
-  let cd0 = lerp(camberDeg, camLow, camHigh, cdCamLow, cdCamHigh);
-
-  if (reynolds > 0) {
-    cd0 *= Math.pow(50000 / reynolds, 0.11);
-  }
-
-  const induced = (cl * cl) / (PI * aspectRatio * efficiency);
-
-  return cd0 + induced;
-}
 
 // ------------------------
 // Forces
@@ -520,4 +519,163 @@ export function calculateDrag({
   }
 
   return q0S * wingArea * dragCoefficient;
+}
+
+export function calculateClAlpha({
+  camberPct,
+  thicknessPct,
+  velocity,
+  alphaMin = -10,
+  alphaMax = 20,
+  step = 1,
+  getCl, // (alphaDeg, camberPct, thicknessPct) => cl
+}) {
+  const alphas = [];
+  const cls = [];
+
+  const clFn =
+    getCl ??
+    ((alphaDeg, camberPct) => {
+      const deg2rad = Math.PI / 180;
+      const alpha = alphaDeg * deg2rad;
+      const alpha0 = (-(camberPct || 0) / 20) * deg2rad;
+      let cl = 2 * Math.PI * (alpha - alpha0);
+      const clMax = 1.8;
+      return Math.max(-clMax, Math.min(clMax, cl));
+    });
+
+  for (let a = alphaMin; a <= alphaMax; a += step) {
+    alphas.push(a);
+    cls.push(velocity === 0 ? 0 : clFn(a, camberPct, thicknessPct));
+  }
+
+  return { alphas, cls };
+}
+
+// --- Build CD–α sweep for Plot Panel (PURE, no computeAero) ---
+// getCd signature: (alphaDeg, camberPct, thicknessPct, extra) => cd
+
+const getCl = (alphaDeg, camberPct, thicknessPct) =>
+  liftCoefficient(alphaDeg, camberPct, thicknessPct);
+
+const getCd = (
+  alphaDeg,
+  camberPct,
+  thicknessPct,
+  { reynolds, aspectRatio, efficiency }
+) =>
+  calculateDragCoefficient({
+    camberDeg: camberPct,
+    thicknessPct,
+    alphaDeg,
+    reynolds,
+    cl: getCl(alphaDeg, camberPct, thicknessPct),
+    aspectRatio,
+    efficiency,
+  });
+
+export function calculateCdAlpha({
+  camberPct,
+  thicknessPct,
+  velocity,
+
+  // sweep config
+  alphaMin = -10,
+  alphaMax = 20,
+  step = 1,
+
+  // physics inputs you may want inside getCd
+  reynolds,
+  aspectRatio,
+  efficiency = 0.85,
+
+  // required: your CD model
+  getCd,
+}) {
+  if (typeof getCd !== "function") {
+    throw new Error("calculateCdAlphaSweep: getCd must be a function");
+  }
+
+  const alphas = [];
+  const cds = [];
+
+  for (let a = alphaMin; a <= alphaMax; a += step) {
+    alphas.push(a);
+
+    if (!velocity) {
+      cds.push(0);
+      continue;
+    }
+
+    const cd = getCd(a, camberPct, thicknessPct, {
+      reynolds,
+      aspectRatio,
+      efficiency,
+    });
+
+    cds.push(Number.isFinite(cd) ? cd : 0);
+  }
+
+  return { alphas, cds };
+}
+
+// --- Build L/D–α sweep for Plot Panel (PURE, no computeAero) ---
+// getCl signature: (alphaDeg, camberPct, thicknessPct, extra) => cl
+// getCd signature: (alphaDeg, camberPct, thicknessPct, extra) => cd
+export function calculateLdAlpha({
+  camberPct,
+  thicknessPct,
+  velocity,
+
+  // sweep config
+  alphaMin = -10,
+  alphaMax = 20,
+  step = 1,
+
+  // physics inputs you may want inside models
+  reynolds,
+  aspectRatio,
+  efficiency = 0.85,
+
+  // required
+  getCl,
+  getCd,
+}) {
+  if (typeof getCl !== "function") {
+    throw new Error("calculateLdAlphaSweep: getCl must be a function");
+  }
+  if (typeof getCd !== "function") {
+    throw new Error("calculateLdAlphaSweep: getCd must be a function");
+  }
+
+  const alphas = [];
+  const lds = [];
+
+  for (let a = alphaMin; a <= alphaMax; a += step) {
+    alphas.push(a);
+
+    if (!velocity) {
+      lds.push(0);
+      continue;
+    }
+
+    const cl = getCl(a, camberPct, thicknessPct, {
+      reynolds,
+      aspectRatio,
+      efficiency,
+    });
+
+    const cd = getCd(a, camberPct, thicknessPct, {
+      reynolds,
+      aspectRatio,
+      efficiency,
+    });
+
+    const ld =
+      Number.isFinite(cl) && Number.isFinite(cd) && cd !== 0 ? cl / cd : 0;
+
+    lds.push(ld);
+  }
+
+  return { alphas, lds };
 }

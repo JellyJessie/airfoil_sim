@@ -1,8 +1,120 @@
 // src/foilsim/PlotButtons.jsx
 import React from "react";
 import { useFoilSim } from "../store/FoilSimContext";
+import { PlotDisplayControls } from "./PlotDisplayControls.jsx";
+
+export function PlotDisplayControls({
+  display,
+  onChangeDisplay,
+  view,
+  onChangeView,
+  onExportCsv,
+}) {
+  const isStreamlines = display === 1;
+  const isMoving = display === 2;
+  const isFreeze = display === 3;
+
+  const is2D = view === 1;
+  const is3D = view === 2;
+
+  const buttonBase = "px-3 py-1 mx-1 text-sm border rounded cursor-pointer"; // Tailwind-ish; tweak or replace with your own
+
+  return (
+    <div
+      className="plot-display-controls"
+      style={{
+        position: "relative",
+        padding: "8px 12px",
+        fontSize: "14px",
+      }}
+    >
+      {/* Display label + modes */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          marginBottom: "8px",
+          gap: "8px",
+        }}
+      >
+        <span style={{ color: "blue", fontWeight: 600 }}>Display</span>
+
+        <button
+          type="button"
+          className={buttonBase}
+          style={{
+            backgroundColor: isStreamlines ? "yellow" : "",
+          }}
+          onClick={() => onChangeDisplay(1)}
+        >
+          Streamlines
+        </button>
+
+        <button
+          type="button"
+          className={buttonBase}
+          style={{
+            backgroundColor: isMoving ? "yellow" : "",
+          }}
+          onClick={() => onChangeDisplay(2)}
+        >
+          Moving
+        </button>
+
+        <button
+          type="button"
+          className={buttonBase}
+          style={{
+            backgroundColor: isFreeze ? "yellow" : "",
+          }}
+          onClick={() => onChangeDisplay(3)}
+        >
+          Freeze
+        </button>
+      </div>
+
+      {/* CSV + view modes */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <button type="button" className={buttonBase} onClick={onExportCsv}>
+          CSV
+        </button>
+
+        <button
+          type="button"
+          className={buttonBase}
+          style={{
+            backgroundColor: is2D ? "yellow" : "",
+          }}
+          onClick={() => onChangeView(1)}
+        >
+          2D view
+        </button>
+
+        <button
+          type="button"
+          className={buttonBase}
+          style={{
+            backgroundColor: is3D ? "yellow" : "",
+          }}
+          onClick={() => onChangeView(2)}
+        >
+          3D view
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function PlotButtons() {
+  const { state, dispatch } = useFoilSim();
+  const { displayMode, viewMode } = state; // you define these in your reducer
+
   const {
     state: { plot, shapeSelect, selectClicked },
     setPlot,
@@ -44,6 +156,13 @@ export default function PlotButtons() {
           </span>
         )}
       </div>
+      <PlotDisplayControls
+        display={displayMode}
+        onChangeDisplay={(mode) => dispatch({ type: "SET_DISPLAY_MODE", mode })}
+        view={viewMode}
+        onChangeView={(mode) => dispatch({ type: "SET_VIEW_MODE", mode })}
+        onExportCsv={() => dispatch({ type: "EXPORT_CSV" })}
+      />
 
       {/* Surface buttons (Pressure / Velocity / Drag) */}
       {hasBeenOpenedOnce && (

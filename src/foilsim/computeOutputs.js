@@ -12,8 +12,11 @@ import {
   calculateLiftForce,
   calculateDragCoefficient,
   calculateDragForce,
-  calculateReynolds,
   calculateDrag,
+  calculateReynolds,
+  calculateClAlpha,
+  calculateCdAlpha,
+  calculateLdAlpha,
   densitySlugFt3,
   calculateQ0T,
   calculateQ0S,
@@ -66,25 +69,6 @@ function mapShape(shapeSelect) {
     default:
       return "airfoil";
   }
-}
-
-// Build CL–α sweep for Plot Panel
-function buildAlphaSweep({
-  camberPct,
-  alphaMin = -10,
-  alphaMax = 20,
-  step = 1,
-}) {
-  const alphas = [];
-  const cls = [];
-
-  for (let a = alphaMin; a <= alphaMax; a += step) {
-    const cl = liftCoefficient(a, camberPct);
-    alphas.push(a);
-    cls.push(cl);
-  }
-
-  return { alphas, cls };
 }
 
 // -----------------------------------------------------------------------------
@@ -141,31 +125,67 @@ export function computeOutputs(state) {
     densityStrat,
   });
 
-  // --- aerodynamics ----------------------------------------------------------
-
   // Lift coefficient (thin airfoil + stall model)
   const cl = liftCoefficient(angleDeg, camberPct);
+  const getCl = (alphaDeg, camberPct, thicknessPct) =>
+    liftCoefficient(alphaDeg, camberPct, thicknessPct);
+
+  const getCd = (
+    alphaDeg,
+    camberPct,
+    thicknessPct,
+    { reynolds, aspectRatio, efficiency }
+  ) =>
+    calculateDragCoefficient({
+      camberDeg: camberPct,
+      thicknessPct,
+      alphaDeg,
+      reynolds,
+      cl: getCl(alphaDeg, camberPct, thicknessPct),
+      aspectRatio,
+      efficiency,
+    });
 
   const aspectRatio = wingArea > 0 ? (span * span) / wingArea : 0;
 
-  // --- CL–alpha plot sweep ---------------------------------------------------
-
-  const clAlpha = buildAlphaSweep({
+  // --- CL–alpha plot  ---------------------------------------------------
+  const clAlpha = calculateClAlpha({
     camberPct,
+    thicknessPct,
+    velocity,
     alphaMin: -10,
     alphaMax: 20,
     step: 1,
+    getCl: (alphaDeg, camberPct) => liftCoefficient(alphaDeg, camberPct),
+  });
+  // Build Cd(α) and L/D(α)
+  const cdAlpha = calculateCdAlpha({
+    camberPct,
+    thicknessPct,
+    velocity,
+    reynolds,
+    aspectRatio,
+    getCd,
+  });
+
+  const ldAlpha = calculateLdAlpha({
+    camberPct,
+    thicknessPct,
+    velocity,
+    reynolds,
+    aspectRatio,
+    getCl,
+    getCd,
   });
 
   // Drag coefficient
   const cd = calculateDragCoefficient({
-    camberDeg: 7.5,
-    thicknessPct: 12,
-    alphaDeg: 8,
-    reynolds: 80000,
-    cl: 0.9,
-    aspectRatio: 4.0,
-    efficiency: 0.85,
+    camberDeg: camberPct,
+    thicknessPct,
+    alphaDeg: angleDeg,
+    reynolds,
+    cl,
+    aspectRatio,
   });
 
   // Forces
@@ -210,10 +230,6 @@ export function computeOutputs(state) {
 
   // --- structured output for panels -----------------------------------------
   // ================= PERFORMANCE ANALYSIS =================
-
-  // Build Cd(α) and L/D(α)
-  const cdAlpha = [];
-  const ldAlpha = [];
   // --- drag breakdown: Cd0 (parasitic) + Cdi (induced) -----------------------
   const { induced, reCorrection } = state; // make sure these exist in state
 
@@ -252,7 +268,7 @@ export function computeOutputs(state) {
     }
   }
 
-  // Compute L/D curve
+  // build L/D(α)
   for (let i = 0; i < clAlpha.alphas.length; i++) {
     const cl_i = clAlpha.cls[i];
 
@@ -265,14 +281,58 @@ export function computeOutputs(state) {
       aspectRatio,
     });
 
-    cdAlpha.push(cd_i);
+    // build Cd(α)
+    const cdAlpha = calculateCdAlpha({
+      camberPct,
+      thicknessPct,
+      velocity,
+      alphaMin: clAlpha.alphas[0],
+      alphaMax: clAlpha.alphas[clAlpha.alphas.length - 1],
+      step: clAlpha.alphas[1] - clAlpha.alphas[0],
+      reynolds,
+      aspectRatio,
+      getCd: (alphaDeg, camberPct, thicknessPct, { reynolds, aspectRatio }) => {
+        const cl = liftCoefficient(alphaDeg, camberPct);
+        return calculateDragCoefficient({
+          camberDeg: camberPct,
+          thicknessPct,
+          alphaDeg,
+          reynolds,
+          cl,
+          aspectRatio,
+        });
+      },
+    });
 
-    const ld_i = cd_i !== 0 ? cl_i / cd_i : 0;
-    ldAlpha.push(ld_i);
+    // build L/D(α)
+    const ldAlpha = calculateLdAlpha({
+      camberPct,
+      thicknessPct,
+      velocity,
+      alphaMin: clAlpha.alphas[0],
+      alphaMax: clAlpha.alphas[clAlpha.alphas.length - 1],
+      step: clAlpha.alphas[1] - clAlpha.alphas[0],
+      reynolds,
+      aspectRatio,
+      getCl: (alphaDeg, camberPct) => liftCoefficient(alphaDeg, camberPct),
+      getCd: (alphaDeg, camberPct, thicknessPct, { reynolds, aspectRatio }) => {
+        const cl = liftCoefficient(alphaDeg, camberPct);
+        return calculateDragCoefficient({
+          camberDeg: camberPct,
+          thicknessPct,
+          alphaDeg,
+          reynolds,
+          cl,
+          aspectRatio,
+        });
+      },
+    });
+
+    const ld_i = ldAlpha.lds[i];
 
     if (ld_i > optimalLD) {
       optimalLD = ld_i;
-      optimalAlpha = clAlpha.alphas[i];
+      optimalAlpha = ldAlpha.alphas[i];
     }
   }
 

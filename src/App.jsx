@@ -7,7 +7,7 @@ import Design3D from "./design/Design3D.jsx";
 import QuickControls from "./components/QuickControls.jsx";
 import { OutputTabs } from "./foilsim/OutputTabs.jsx";
 import PlotButtons from "./components/PlotButtons.jsx";
-import SAWDPlotControls from "./foilsim/PlotControls.jsx";
+import PlotControls from "./foilsim/PlotControls.jsx";
 import AnalysisPanel from "./components/AnalysisPanel.jsx";
 import InputTabs from "./foilsim/InputTabs.jsx";
 import FlowCanvas from "./components/FlowCanvas.jsx";
@@ -163,7 +163,7 @@ function FoilSimPanel() {
 
             {shapeSelect <= 3 && (
               <>
-                <SAWDPlotControls />{" "}
+                <PlotControls />{" "}
                 {/* Speed / Altitude / Wing / Density row we wrote */}
                 {/* Later: add Angle / Camber / Thickness row */}
               </>
@@ -211,9 +211,9 @@ function AppInner() {
 export default function App() {
   return (
     <FoilSimProvider>
-      <AppInner />
       <div className="app foilsim-layout">
         {/* Left side: controls */}
+        <AppInner />
         <div className="foilsim-left">
           <h2>FoilSim</h2>
           <InputTabs />
