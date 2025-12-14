@@ -1,9 +1,6 @@
 // src/App.jsx
 import React, { useState } from "react";
 import { FoilSimProvider, useFoilSim } from "./store/FoilSimContext.jsx";
-
-import DesignApp from "./design/DesignApp.jsx";
-import Design3D from "./design/Design3D.jsx";
 import QuickControls from "./components/QuickControls.jsx";
 import { OutputTabs } from "./foilsim/OutputTabs.jsx";
 import PlotButtons from "./components/PlotButtons.jsx";
@@ -11,40 +8,7 @@ import PlotControls from "./foilsim/PlotControls.jsx";
 import AnalysisPanel from "./components/AnalysisPanel.jsx";
 import InputTabs from "./foilsim/InputTabs.jsx";
 import FlowCanvas from "./components/FlowCanvas.jsx";
-import { Environment, UnitSystem } from "./components/shape.js";
 import FoilSimPanel from "./components/FoilSimPanel.jsx";
-
-/**
- * Simple angle-of-attack slider using FoilSim context
- */
-function AngleControl() {
-  const {
-    state: { angleDeg },
-    dispatch,
-  } = useFoilSim();
-
-  const handleChange = (e) => {
-    const value = Number(e.target.value);
-    dispatch({ type: "SET_INPUT", key: "angleDeg", value });
-  };
-
-  return (
-    <div style={{ marginBottom: "1rem" }}>
-      <label>
-        Angle of attack (deg): <strong>{angleDeg.toFixed(1)}</strong>
-      </label>
-      <br />
-      <input
-        type="range"
-        min={-20}
-        max={20}
-        step={0.5}
-        value={angleDeg}
-        onChange={handleChange}
-      />
-    </div>
-  );
-}
 
 /**
  * Root app
@@ -71,7 +35,6 @@ function AppInner() {
       <hr style={{ margin: "16px 0" }} />
 
       {/* Context-powered controls */}
-
       <FoilSimPanel />
     </div>
   );
@@ -84,7 +47,7 @@ export default function App() {
         {/* Left side: controls */}
         <AppInner />
         <div className="foilsim-left">
-          <h2>FoilSim</h2>
+          <h2>Simulation Plot</h2>
           <InputTabs />
         </div>
 

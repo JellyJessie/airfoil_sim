@@ -130,6 +130,7 @@ function buildWingGeometry({
 // ------------------------------------------------------------------
 
 export default function Design3D({
+  angleDeg = 0,
   chord = 1.0,
   t = 0.12,
   m = 0.02,
@@ -140,6 +141,12 @@ export default function Design3D({
   height = 520,
 }) {
   const mountRef = useRef(null);
+
+  // ✅ NEW: store latest AoA without recreating the scene
+  const angleRef = useRef(angleDeg);
+  useEffect(() => {
+    angleRef.current = angleDeg;
+  }, [angleDeg]);
 
   const base2d = useMemo(() => naca4({ m, p, t, c: 1, n: 300 }), [m, p, t]);
   const scaled2d = useMemo(
@@ -226,6 +233,11 @@ export default function Design3D({
     let raf = 0;
     const tick = () => {
       raf = requestAnimationFrame(tick);
+
+      // ✅ NEW: AoA “pitch” in XY plane = rotate about Z axis
+      // Use + or - depending on your sign convention
+      mesh.rotation.z = deg2rad(angleRef.current);
+
       controls.update();
       renderer.render(scene, camera);
     };

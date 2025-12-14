@@ -587,12 +587,13 @@ export default function FoilSimPanel() {
             >
               <div style={{ marginTop: 12 }}>
                 <Design3D
+                  angleDeg={angleDeg}
                   chord={chord}
                   t={t}
                   m={m}
                   p={p}
                   span={span}
-                  height={420}
+                  alphaDeg={angleDeg}
                 />
               </div>
 
