@@ -16,6 +16,7 @@ import React, {
   useEffect,
 } from "react";
 import GeometryPanel from "../components/GeometryPanel.jsx";
+import GeometryProbeOverlay from "./GeometryProbeOverlay.jsx";
 
 const Ctx = createContext(null);
 
@@ -61,9 +62,10 @@ export default function OutputsPanel() {
     span: state.span,
     area: state.S,
     radius: state.radius,
-    xm: state.xm ?? [],
-    plp: state.plp ?? [],
-    plv: state.plv ?? [],
+    xm: out.xm ?? [],
+    plp: out.plp ?? [],
+    plv: out.plv ?? [],
+    q0: out.q0 ?? [],
     areaString: state.units === "imperial" ? "sq ft" : "sq m",
     liftRef: 0,
     dragRef: 0,
@@ -103,16 +105,42 @@ export default function OutputsPanel() {
         </div>
       );
 
-    case 2: // Geometry
-      <GeometryPanel state={state} />;
+    case 2: {
+      const merged = {
+        ...state,
+        xm: out.xm ?? state.xm,
+        ym: out.ym ?? state.ym,
+        plp: out.plp ?? state.plp,
+        plv: out.plv ?? state.plv,
+      };
+
       return (
-        <div>
-          <div>Chord: {out.chord}</div>
-          <div>Span: {out.span}</div>
-          <div>Area: {out.wingArea}</div>
-          <div>AR: {out.aspectRatio?.toFixed?.(2)}</div>
+        <div style={{ display: "grid", gap: 12 }}>
+          <GeometryProbeOverlay
+            xm={merged.xm}
+            ym={merged.ym}
+            plp={merged.plp}
+            plv={merged.plv}
+            shapeSelect={merged.shapeSelect}
+            mode="cp"
+            ShapeClass={Shape}
+            unitsCode={merged.units === "imperial" ? 1 : 2}
+            environmentSelect={merged.environmentSelect}
+            angleDeg={merged.alphaDeg}
+            camber={merged.m}
+            thickness={merged.t}
+            velocity={merged.V}
+            altitude={merged.altitude}
+            chord={merged.chord}
+            span={merged.span}
+            wingArea={merged.S}
+            q0={out.q0}
+          />
+
+          <GeometryPanel state={merged} />
         </div>
       );
+    }
 
     case 3: // Data
       return <pre style={{ fontSize: 12 }}>{JSON.stringify(out, null, 2)}</pre>;

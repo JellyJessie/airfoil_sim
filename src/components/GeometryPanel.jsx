@@ -1,3 +1,6 @@
+import React from "react";
+import { useFoilSim } from "../store/FoilSimContext";
+
 function fmtFixed(v, n) {
   return Number.isFinite(v) ? v.toFixed(n) : "—";
 }
@@ -28,8 +31,8 @@ function GeometryPanel({ state }) {
   const plp = state.plp ?? [];
   const plv = state.plv ?? [];
 
-  const upperIdx = Array.from({ length: 19 }, (_, k) => npt2 - k); // 19..1
-  const lowerIdx = Array.from({ length: 19 }, (_, k) => npt2 + k); // 19..37
+  const upperIdx = Array.from({ length: 19 }, (_, k) => npt2 - k + 1); // 20..2
+  const lowerIdx = Array.from({ length: 19 }, (_, k) => npt2 + k - 1); // 18..36
 
   const makeRows = (indices) =>
     indices.map((i) => {

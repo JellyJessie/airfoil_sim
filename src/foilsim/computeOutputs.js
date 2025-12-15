@@ -228,15 +228,62 @@ export function computeOutputs(state) {
     gamval,
   });
 
-  // ---- Geometry arrays for GeometryPanel (NASA-compatible) ----
-  let xm = [];
-  let ym = [];
+  // --- build probe arrays for plots + geometry ----------------------------------
+  // foilsimPlots expects:
+  //   xm: 2 x N array (upper/lower rows)
+  //   plp: pressure probe array indexed 0..36 (we keep length 40 for safety)
+  //   plv: velocity probe array indexed 0..36
+  // and uses idx = npt2 - k + 1 (upper) or npt2 + k - 1 (lower). :contentReference[oaicite:3]{index=3}
+
+  const nptc = 37; // same as flowField default nPoints
+  const MAX_J = 40; // safe size (legacy style)
+  const convdr = Math.PI / 180;
+
+  // 1) geometry arrays as 2 x MAX_J (upper/lower rows)
+  const xm = [Array(MAX_J).fill(0), Array(MAX_J).fill(0)];
+  const ym = [Array(MAX_J).fill(0), Array(MAX_J).fill(0)];
 
   if (flowField?.bodyPoints?.length) {
-    xm = [flowField.bodyPoints.map((p) => p.x)];
-    ym = [flowField.bodyPoints.map((p) => p.y)];
+    const n = Math.min(nptc, flowField.bodyPoints.length);
+    for (let i = 0; i < n; i++) {
+      const p = flowField.bodyPoints[i];
+      xm[0][i] = p.x;
+      ym[0][i] = p.y;
+      xm[1][i] = p.x;
+      ym[1][i] = p.y;
+    }
   }
 
+  // 2) probe arrays (pressure/velocity)
+  const plv = Array(MAX_J).fill(0);
+  const plp = Array(MAX_J).fill(0);
+  // baseline p∞ in display units (psi/kPa)
+  const pconv = unitSystem === UnitSystem.IMPERIAL ? 14.7 : 101.3;
+  const pInfDisplay = pconv;
+
+  // dynamic pressure q∞ in display units (assumes q is psf)
+  const qInfDisplay = (q / 2116.0) * pconv;
+
+  // circulation proxy
+  const alphaRad = angleDeg * convdr;
+  const Gamma = 4.0 * Math.PI * velocity * rval * Math.sin(alphaRad);
+
+  for (let idx = 0; idx < nptc; idx++) {
+    const thetaDeg = (idx * 360.0) / (nptc - 1);
+    const thetaRad = thetaDeg * convdr;
+
+    const vTheta =
+      -2.0 * velocity * Math.sin(thetaRad - alphaRad) +
+      Gamma / (2.0 * Math.PI * rval);
+
+    const vLocal = Math.abs(vTheta);
+    plv[idx] = vLocal;
+
+    const cp =
+      velocity !== 0 ? 1.0 - (vLocal * vLocal) / (velocity * velocity) : 0;
+
+    plp[idx] = pInfDisplay + cp * qInfDisplay;
+  }
   // --- structured output for panels -----------------------------------------
   // ================= PERFORMANCE ANALYSIS =================
   // --- drag breakdown: Cd0 (parasitic) + Cdi (induced) -----------------------
@@ -349,9 +396,17 @@ export function computeOutputs(state) {
   const isStalled = stallAlpha !== null && angleDeg >= stallAlpha;
 
   return {
-    // geometry arrays (USED by GeometryPanel)
+    // geometry arrays (USED by GeometryPanel + probe overlay)
     xm,
     ym,
+    plp,
+    plv,
+
+    // ✅ dynamic pressure for Cp (q∞)
+    q0: q,
+
+    // optional debug
+    flowField,
 
     // geometry panel
     shapeType,
@@ -371,29 +426,26 @@ export function computeOutputs(state) {
     reynolds,
     liftOverDrag,
 
-    // ✅ NEW: drag breakdown
-    cd0, // parasitic
-    cdi, // induced
+    // drag breakdown
+    cd0,
+    cdi,
 
-    // environment (minimal, can be extended)
+    // environment
     velocity,
     altitude,
-    q0: altitude <= 36000 ? q0T : q0S,
 
     // plot panel
     plots: {
       clAlpha,
-      cdAlpha, // ✅ NEW
-      ldAlpha, // ✅ NEW
+      cdAlpha,
+      ldAlpha,
     },
 
-    // future (optional)
     rotation: {
       radius,
       spin,
     },
 
-    // raw selections (debugging / UI logic)
     units: unitSystem,
     environment,
   };

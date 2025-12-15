@@ -49,15 +49,11 @@ export default function App() {
         <AppInner />
         <div className="foilsim-left">
           <h2>Simulation Plot</h2>
-          <InputTabs />
         </div>
-
-        <FlowCanvas />
 
         {/* Right side: NASA-style Gage/Geometry/Data/Plot outputs */}
         <div className="foilsim-right">
           <div style={{ position: "relative", zIndex: 5000 }}>
-            <OutputTabs />
             <OutputsPanel /> {/* ✅ now the buttons visibly do something */}
           </div>
         </div>
@@ -65,3 +61,5 @@ export default function App() {
     </FoilSimProvider>
   );
 }
+
+/*  <InputTabs /> */

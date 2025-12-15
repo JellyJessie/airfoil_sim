@@ -236,7 +236,6 @@ function generateStreamlines({
   return field;
 }
 
-// PUBLIC: the generateFlowField your React app / computeOutputs uses
 export function generateFlowField({
   alphaDeg, // angle of attack in degrees
   xcval, // circle center x (cylinder plane)
@@ -269,8 +268,8 @@ export function generateFlowField({
     // rotate so freestream is horizontal (subtract AoA)
     const rdm = Math.sqrt(xm * xm + ym * ym);
     const thtm = Math.atan2(ym, xm) / convdr;
-    xm = rdm * Math.cos((thtm - alphaDeg) * convdr);
-    ym = rdm * Math.sin((thtm - alphaDeg) * convdr);
+    xm = rdm * Math.cos((thtm + alphaDeg) * convdr);
+    ym = rdm * Math.sin((thtm + alphaDeg) * convdr);
 
     bodyPoints.push({ x: xm, y: ym });
   }
@@ -310,8 +309,8 @@ export function generateFlowField({
       // rotate to AoA frame (free stream horizontal)
       const radm = Math.sqrt(lxm * lxm + lym * lym);
       const thetm = Math.atan2(lym, lxm) / convdr;
-      let lxmt = radm * Math.cos(convdr * (thetm - alphaDeg));
-      let lymt = radm * Math.sin(convdr * (thetm - alphaDeg));
+      let lxmt = radm * Math.cos(convdr * (thetm + alphaDeg));
+      let lymt = radm * Math.sin(convdr * (thetm + alphaDeg));
 
       // stall model: freeze y downstream of separation, same as legacy
       if (alphaDeg > 10.0 && psv > 0.0 && lxmt > 0.0 && line.length > 0) {
