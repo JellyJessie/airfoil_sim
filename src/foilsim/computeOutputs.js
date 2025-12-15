@@ -228,6 +228,15 @@ export function computeOutputs(state) {
     gamval,
   });
 
+  // ---- Geometry arrays for GeometryPanel (NASA-compatible) ----
+  let xm = [];
+  let ym = [];
+
+  if (flowField?.bodyPoints?.length) {
+    xm = [flowField.bodyPoints.map((p) => p.x)];
+    ym = [flowField.bodyPoints.map((p) => p.y)];
+  }
+
   // --- structured output for panels -----------------------------------------
   // ================= PERFORMANCE ANALYSIS =================
   // --- drag breakdown: Cd0 (parasitic) + Cdi (induced) -----------------------
@@ -340,6 +349,10 @@ export function computeOutputs(state) {
   const isStalled = stallAlpha !== null && angleDeg >= stallAlpha;
 
   return {
+    // geometry arrays (USED by GeometryPanel)
+    xm,
+    ym,
+
     // geometry panel
     shapeType,
     angleDeg,

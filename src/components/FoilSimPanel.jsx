@@ -2,6 +2,9 @@ import React, { useMemo, useRef } from "react";
 import { useFoilSim } from "../store/FoilSimContext.jsx";
 import { computeOutputs } from "../foilsim/computeOutputs.js"; // adjust path if different
 import Design3D from "../design/Design3D.jsx"; // we’ll patch it to accept props
+import AnalysisPanel from "./AnalysisPanel.jsx";
+import FlowCanvas from "./FlowCanvas.jsx";
+import OutputTabs from "../foilsim/OutputTabs.jsx";
 
 // ---------------- NACA 4 helpers (from your DesignApp) ----------------
 function deg2rad(d) {
@@ -530,6 +533,12 @@ export default function FoilSimPanel() {
               </>
             )}
           </div>
+
+          <div
+            style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12 }}
+          >
+            <AnalysisPanel />
+          </div>
         </div>
 
         {/* RIGHT: 2D preview + 3D view underneath */}
@@ -600,6 +609,22 @@ export default function FoilSimPanel() {
               <p style={{ margin: "8px 0 0", opacity: 0.75 }}>
                 Orbit with mouse drag • Zoom with wheel
               </p>
+            </div>
+
+            <div
+              style={{
+                border: "1px solid #ddd",
+                borderRadius: 12,
+                padding: 12,
+              }}
+            >
+              {/* Right side: NASA-style Gage/Geometry/Data/Plot outputs */}
+              <div className="foilsim-right">
+                <div style={{ position: "relative", zIndex: 5000 }}>
+                  <OutputTabs />
+                </div>
+              </div>
+              <FlowCanvas />
             </div>
           </div>
         </div>

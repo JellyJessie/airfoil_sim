@@ -1,4 +1,4 @@
-import { computeAirfoil } from "./computeAirfoil";
+import { computeAirfoil } from "../components/foilSimCore.js";
 import { Environment, UnitSystem, Shape, Airfoil } from "./shape.js";
 
 // ---------- helpers for Plotly traces ----------
@@ -1562,7 +1562,6 @@ export function buildFoilSimPlot(params) {
 }
 
 // foilsimVelocityProbe.js (or inside your plots module)
-
 export function buildVelocityProbePlot({ velocity = 0, units = 1 }) {
   // units: 1 = imperial, 2 = metric
   const velUnits = units === 1 ? " mph" : " km/h";

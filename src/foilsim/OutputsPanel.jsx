@@ -1,19 +1,27 @@
 import { computeOutputs } from "./computeOutputs.js";
 import { useFoilSim } from "../store/FoilSimContext.jsx";
 import Plot from "react-plotly.js";
-import { Shape, Airfoil } from "../core/shape.js"; // adjust path as needed
+import { Shape, Airfoil } from "../components/shape.js"; // adjust path as needed
 import {
   createAirfoilPlot,
   buildFoilSimPlot,
   buildVelocityProbePlot,
 } from "../components/foilsimPlots.js";
-import React, { createContext, useContext, useReducer } from "react";
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useMemo,
+  useState,
+  useEffect,
+} from "react";
+import GeometryPanel from "../components/GeometryPanel.jsx";
 
 const Ctx = createContext(null);
 
 export default function OutputsPanel() {
   const { state, set } = useFoilSim();
-  const outputs = computeOutputs(state);
+  const out = useMemo(() => computeOutputs(state), [state]);
   const { plot, dropdown1, dropdown2 } = state;
 
   const { getClPlot, getDrag } = createAirfoilPlot({
@@ -53,14 +61,14 @@ export default function OutputsPanel() {
     span: state.span,
     area: state.S,
     radius: state.radius,
-    xm: arrays.xm,
-    plp: arrays.plp,
-    plv: arrays.plv,
+    xm: state.xm ?? [],
+    plp: state.plp ?? [],
+    plv: state.plv ?? [],
     areaString: state.units === "imperial" ? "sq ft" : "sq m",
-    liftRef: refs.lift,
-    dragRef: refs.drag,
-    clRef: refs.cl,
-    cdRef: refs.cd,
+    liftRef: 0,
+    dragRef: 0,
+    clRef: 0,
+    cdRef: 0,
     Shape, // still used for env plots (rho, p, etc)
     Airfoil, // NEW: used by all performance plots (4–7)
   });
@@ -81,7 +89,45 @@ export default function OutputsPanel() {
     envDisplay,
     lengthUnit,
     forceUnit,
-  } = outputs;
+  } = out;
+
+  switch (state.outputButton) {
+    case 1: // Gage
+      return (
+        <div>
+          <div>CL: {out.cl?.toFixed?.(4)}</div>
+          <div>CD: {out.cd?.toFixed?.(4)}</div>
+          <div>Lift: {out.lift?.toFixed?.(2)}</div>
+          <div>Drag: {out.drag?.toFixed?.(2)}</div>
+          <div>Re: {out.reynolds?.toFixed?.(0)}</div>
+        </div>
+      );
+
+    case 2: // Geometry
+      <GeometryPanel state={state} />;
+      return (
+        <div>
+          <div>Chord: {out.chord}</div>
+          <div>Span: {out.span}</div>
+          <div>Area: {out.wingArea}</div>
+          <div>AR: {out.aspectRatio?.toFixed?.(2)}</div>
+        </div>
+      );
+
+    case 3: // Data
+      return <pre style={{ fontSize: 12 }}>{JSON.stringify(out, null, 2)}</pre>;
+
+    case 4: // Plot
+      return (
+        <div>
+          {/* You can render Plotly here using out.plots.clAlpha / cdAlpha / ldAlpha */}
+          <div>Plot panel (wired)</div>
+        </div>
+      );
+
+    default:
+      return null;
+  }
 
   return (
     <div className="af-panel">

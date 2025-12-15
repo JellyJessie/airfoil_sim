@@ -94,8 +94,13 @@ function foilSimReducer(state, action) {
     case "SET_INPUT_BUTTON":
       return { ...state, inputButton: action.value };
 
-    case "SET_OUTPUT_BUTTON":
-      return { ...state, outputButton: action.value };
+    case "SET_OUTPUT_BUTTON": {
+      const next = { ...state, outputButton: action.value };
+      if (action.value === 4) {
+        next.plot = next.plot ?? 2; // pick your default plot id
+      }
+      return next;
+    }
 
     case "INCREMENT_SELECT_CLICKED":
       return { ...state, selectClicked: state.selectClicked + 1 };

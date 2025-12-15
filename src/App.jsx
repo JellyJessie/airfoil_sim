@@ -9,6 +9,7 @@ import AnalysisPanel from "./components/AnalysisPanel.jsx";
 import InputTabs from "./foilsim/InputTabs.jsx";
 import FlowCanvas from "./components/FlowCanvas.jsx";
 import FoilSimPanel from "./components/FoilSimPanel.jsx";
+import OutputsPanel from "./foilsim/OutputsPanel.jsx";
 
 /**
  * Root app
@@ -57,6 +58,7 @@ export default function App() {
         <div className="foilsim-right">
           <div style={{ position: "relative", zIndex: 5000 }}>
             <OutputTabs />
+            <OutputsPanel /> {/* ✅ now the buttons visibly do something */}
           </div>
         </div>
       </div>

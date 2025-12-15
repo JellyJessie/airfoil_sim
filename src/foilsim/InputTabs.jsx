@@ -10,14 +10,6 @@ const INPUT_MODES = [
   { id: 5, label: "Select" },
 ];
 
-// 1 = Gage, 2 = Geometry, 3 = Data, 4 = Plot
-const OUTPUT_MODES = [
-  { id: 1, key: "gage", label: "Gage" },
-  { id: 2, key: "geometry", label: "Geometry" },
-  { id: 3, key: "data", label: "Data" },
-  { id: 4, key: "plot", label: "Plot" },
-];
-
 // Named export – this is what Layout.jsx imports with { InputTabs }
 export default function InputTabs({ onModeChange }) {
   const { state, set } = useFoilSim();

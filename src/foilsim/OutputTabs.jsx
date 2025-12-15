@@ -14,10 +14,11 @@ export function OutputTabs() {
     dispatch,
   } = useFoilSim();
 
+  // OutputTabs.jsx
   const setOutput = (value) => {
     dispatch({
-      type: value === 4 ? "SELECT_PLOT_PANEL" : "SET_OUTPUT_BUTTON",
-      outputButton: value,
+      type: "SET_OUTPUT_BUTTON",
+      value, // ✅ use "value" consistently
     });
   };
 
