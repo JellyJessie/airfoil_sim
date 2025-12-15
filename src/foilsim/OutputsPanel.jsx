@@ -1,111 +1,178 @@
-import { computeOutputs } from "./computeOutputs.js";
-import { useFoilSim } from "../store/FoilSimContext.jsx";
+import React, { useMemo } from "react";
 import Plot from "react-plotly.js";
-import { Shape, Airfoil } from "../components/shape.js"; // adjust path as needed
-import {
-  createAirfoilPlot,
-  buildFoilSimPlot,
-  buildVelocityProbePlot,
-} from "../components/foilsimPlots.js";
-import React, {
-  createContext,
-  useContext,
-  useReducer,
-  useMemo,
-  useState,
-  useEffect,
-} from "react";
+
+import { useFoilSim } from "../store/FoilSimContext.jsx";
+import { computeOutputs } from "./computeOutputs.js";
+
+import { Shape, Airfoil } from "../components/shape.js";
+import { buildVelocityProbePlot } from "../components/foilsimPlots.js";
+
 import GeometryPanel from "../components/GeometryPanel.jsx";
 import GeometryProbeOverlay from "./GeometryProbeOverlay.jsx";
+import makeDataString from "../components/makeDataString.jsx";
 
-const Ctx = createContext(null);
+// ---- helpers ----
+function pickSeries(obj, candidates, fallback = []) {
+  for (const k of candidates) {
+    const v = obj?.[k];
+    if (Array.isArray(v)) return v;
+  }
+  return fallback;
+}
+
+function InfoStrip({ label, x, y }) {
+  const n = Math.min(x?.length ?? 0, y?.length ?? 0);
+  const first = n ? x[0] : null;
+  const last = n ? x[n - 1] : null;
+  return (
+    <div
+      style={{
+        fontSize: 12,
+        color: "#bbb",
+        background: "#111",
+        border: "1px solid #333",
+        borderRadius: 6,
+        padding: "6px 8px",
+      }}
+    >
+      <b style={{ color: "#eee" }}>{label}</b>{" "}
+      {n ? (
+        <>
+          n={n}, α[0]={Number(first).toFixed?.(2)}, α[last]=
+          {Number(last).toFixed?.(2)}
+        </>
+      ) : (
+        <>no data</>
+      )}
+    </div>
+  );
+}
+
+function makeLinePlot({ title, xTitle, yTitle, x, y, infoLabel }) {
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      <InfoStrip label={infoLabel} x={x} y={y} />
+      <Plot
+        data={[
+          {
+            type: "scatter",
+            mode: "lines+markers",
+            x,
+            y,
+          },
+        ]}
+        layout={{
+          title,
+          xaxis: { title: xTitle },
+          yaxis: { title: yTitle },
+          margin: { t: 50, l: 60, r: 20, b: 50 },
+        }}
+        config={{ responsive: true, displayModeBar: false }}
+        style={{ width: "100%", height: 320 }}
+      />
+    </div>
+  );
+}
+
+function PlotTab({ out }) {
+  const clAlpha = out?.plots?.clAlpha;
+  const cdAlpha = out?.plots?.cdAlpha;
+  const ldAlpha = out?.plots?.ldAlpha;
+
+  // robust key support (in case your physics helpers name arrays differently)
+  const alphasCL = pickSeries(clAlpha, ["alphas", "alpha", "x"], []);
+  const cls = pickSeries(clAlpha, ["cls", "cl", "y"], []);
+
+  const alphasCD = pickSeries(cdAlpha, ["alphas", "alpha", "x"], []);
+  const cds = pickSeries(cdAlpha, ["cds", "cd", "y"], []);
+
+  const alphasLD = pickSeries(ldAlpha, ["alphas", "alpha", "x"], []);
+  const lds = pickSeries(ldAlpha, ["lds", "ld", "y"], []);
+
+  if (!alphasCL.length || !alphasCD.length || !alphasLD.length) {
+    return (
+      <div style={{ color: "#888", padding: 12 }}>
+        No plot data yet. (Check that computeOutputs returns
+        out.plots.clAlpha/cdAlpha/ldAlpha.)
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {makeLinePlot({
+        title: "CL vs α",
+        xTitle: "α (deg)",
+        yTitle: "CL",
+        x: alphasCL,
+        y: cls,
+        infoLabel: `alphasCL (from out.plots.clAlpha)`,
+      })}
+
+      {makeLinePlot({
+        title: "CD vs α",
+        xTitle: "α (deg)",
+        yTitle: "CD",
+        x: alphasCD,
+        y: cds,
+        infoLabel: `alphasCD (from out.plots.cdAlpha)`,
+      })}
+
+      {makeLinePlot({
+        title: "L/D vs α",
+        xTitle: "α (deg)",
+        yTitle: "L/D",
+        x: alphasLD,
+        y: lds,
+        infoLabel: `alphasLD (from out.plots.ldAlpha)`,
+      })}
+    </div>
+  );
+}
 
 export default function OutputsPanel() {
-  const { state, set } = useFoilSim();
+  const { state } = useFoilSim();
   const out = useMemo(() => computeOutputs(state), [state]);
-  const { plot, dropdown1, dropdown2 } = state;
 
-  const { getClPlot, getDrag } = createAirfoilPlot({
-    angleDeg: state.alphaDeg,
-    camberPct: state.m,
-    thicknessPct: state.t,
-    velocity: state.V,
-    altitude: state.altitude,
-    chord: state.chord,
-    span: state.span,
-    wingArea: state.S,
-    environment: state.environmentSelect, // whatever your computeAirfoil expects
-    options: {
-      units: state.units, // "imperial" | "metric"
-      aspectRatioCorrection: state.ar,
-      inducedDrag: state.induced,
-      reynoldsCorrection: state.reCorrection,
-      liftMode: state.liftAnalisis, // 1=Stall, 2=Ideal
-    },
-  });
+  // velocity probe plot (simple helper)
+  const { data: velData, layout: velLayout } = useMemo(() => {
+    return buildVelocityProbePlot({
+      velocity: state.V,
+      units: state.units === "imperial" ? 1 : 2,
+    });
+  }, [state.V, state.units]);
 
-  const { data, layout } = buildFoilSimPlot({
-    plot,
-    lift: state.lift,
-    drag: state.drag,
-    units: state.units === "imperial" ? 1 : 2,
-    shapeSelect: state.shapeSelect,
-    environmentSelect: state.environmentSelect,
-    dropdown1,
-    dropdown2,
-    angle: state.alphaDeg,
-    camber: state.m, // camber % chord
-    thickness: state.t, // thickness % chord
-    velocity: state.V,
-    altitude: state.altitude,
-    chord: state.chord,
-    span: state.span,
-    area: state.S,
-    radius: state.radius,
-    xm: out.xm ?? [],
-    plp: out.plp ?? [],
-    plv: out.plv ?? [],
-    q0: out.q0 ?? [],
-    areaString: state.units === "imperial" ? "sq ft" : "sq m",
-    liftRef: 0,
-    dragRef: 0,
-    clRef: 0,
-    cdRef: 0,
-    Shape, // still used for env plots (rho, p, etc)
-    Airfoil, // NEW: used by all performance plots (4–7)
-  });
-
-  const { data: velData, layout: velLayout } = buildVelocityProbePlot({
-    velocity: state.V,
-    units: state.units === "imperial" ? 1 : 2,
-  });
-
-  const {
-    shapeString,
-    lift,
-    drag,
-    cL,
-    cD,
-    Re,
-    L_over_D,
-    envDisplay,
-    lengthUnit,
-    forceUnit,
-  } = out;
-
+  // --- Panels ---
   switch (state.outputButton) {
     case 1: // Gage
       return (
-        <div>
-          <div>CL: {out.cl?.toFixed?.(4)}</div>
-          <div>CD: {out.cd?.toFixed?.(4)}</div>
-          <div>Lift: {out.lift?.toFixed?.(2)}</div>
-          <div>Drag: {out.drag?.toFixed?.(2)}</div>
-          <div>Re: {out.reynolds?.toFixed?.(0)}</div>
+        <div style={{ display: "grid", gap: 6 }}>
+          <div>CL: {Number.isFinite(out.cl) ? out.cl.toFixed(4) : "—"}</div>
+          <div>CD: {Number.isFinite(out.cd) ? out.cd.toFixed(4) : "—"}</div>
+          <div>
+            Lift: {Number.isFinite(out.lift) ? out.lift.toFixed(2) : "—"}
+          </div>
+          <div>
+            Drag: {Number.isFinite(out.drag) ? out.drag.toFixed(2) : "—"}
+          </div>
+          <div>
+            Re: {Number.isFinite(out.reynolds) ? out.reynolds.toFixed(0) : "—"}
+          </div>
+          {Number.isFinite(out.cd0) || Number.isFinite(out.cdi) ? (
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.9 }}>
+              <div>
+                CD0: {Number.isFinite(out.cd0) ? out.cd0.toFixed(4) : "—"}
+              </div>
+              <div>
+                CDi: {Number.isFinite(out.cdi) ? out.cdi.toFixed(4) : "—"}
+              </div>
+            </div>
+          ) : null}
         </div>
       );
 
     case 2: {
+      // Geometry (use computeOutputs arrays if available)
       const merged = {
         ...state,
         xm: out.xm ?? state.xm,
@@ -143,157 +210,39 @@ export default function OutputsPanel() {
     }
 
     case 3: // Data
-      return <pre style={{ fontSize: 12 }}>{JSON.stringify(out, null, 2)}</pre>;
-
-    case 4: // Plot
       return (
-        <div>
-          {/* You can render Plotly here using out.plots.clAlpha / cdAlpha / ldAlpha */}
-          <div>Plot panel (wired)</div>
+        <div
+          style={{
+            whiteSpace: "pre-wrap",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: 12,
+          }}
+        >
+          {makeDataString(state, out)}
         </div>
       );
+
+    case 4: // Plot
+      return <PlotTab out={out} />;
 
     default:
       return null;
   }
+}
 
-  return (
-    <div className="af-panel">
-      <h2 className="af-title">Results</h2>
-
-      <div style={{ marginBottom: 8 }}>
-        <strong>Shape:</strong> {shapeString || "—"}
-      </div>
-
-      <div style={{ display: "grid", gap: 4 }}>
-        <label>
-          Lift ({forceUnit}):{" "}
-          <input
-            type="text"
-            readOnly
-            value={Number.isFinite(lift) ? lift.toFixed(0) : ""}
-            style={{ width: 120 }}
-          />
-        </label>
-
-        <label>
-          Drag ({forceUnit}):{" "}
-          <input
-            type="text"
-            readOnly
-            value={Number.isFinite(drag) ? drag.toFixed(0) : ""}
-            style={{ width: 120 }}
-          />
-        </label>
-
-        <label>
-          C<sub>L</sub>:{" "}
-          <input
-            type="text"
-            readOnly
-            value={Number.isFinite(cL) ? cL.toFixed(2) : ""}
-            style={{ width: 80 }}
-          />
-        </label>
-
-        <label>
-          C<sub>D</sub>:{" "}
-          <input
-            type="text"
-            readOnly
-            value={Number.isFinite(cD) ? cD.toFixed(3) : ""}
-            style={{ width: 80 }}
-          />
-        </label>
-
-        <label>
-          Re:{" "}
-          <input
-            type="text"
-            readOnly
-            value={Number.isFinite(Re) ? Re.toFixed(0) : ""}
-            style={{ width: 120 }}
-          />
-        </label>
-
-        <label>
-          L / D:{" "}
-          <input
-            type="text"
-            readOnly
-            value={Number.isFinite(L_over_D) ? L_over_D.toFixed(3) : ""}
-            style={{ width: 80 }}
-          />
-        </label>
-      </div>
-
-      {envDisplay && (
-        <>
-          <hr style={{ margin: "12px 0" }} />
-          <div style={{ fontWeight: "bold", marginBottom: 4 }}>Environment</div>
-          <div style={{ display: "grid", gap: 4 }}>
-            <label>
-              Static p:{" "}
-              <input
-                type="text"
-                readOnly
-                value={envDisplay.staticPressure.toFixed(3)}
-                style={{ width: 120 }}
-              />
-            </label>
-            <label>
-              ρ:{" "}
-              <input
-                type="text"
-                readOnly
-                value={envDisplay.density.toFixed(5)}
-                style={{ width: 120 }}
-              />
-            </label>
-            <label>
-              q₀:{" "}
-              <input
-                type="text"
-                readOnly
-                value={envDisplay.dynPressure.toFixed(3)}
-                style={{ width: 120 }}
-              />
-            </label>
-            <label>
-              Temp:{" "}
-              <input
-                type="text"
-                readOnly
-                value={envDisplay.temp.toFixed(0)}
-                style={{ width: 80 }}
-              />
-            </label>
-            <label>
-              μ:{" "}
-              <input
-                type="text"
-                readOnly
-                value={envDisplay.viscosity.toExponential(3)}
-                style={{ width: 140 }}
-              />
-            </label>
-          </div>
-
+/*
+        <div style={{ display: "grid", gap: 12 }}>
           <Plot
             data={data}
             layout={{ ...layout, margin: { t: 40, l: 50, r: 10, b: 40 } }}
             config={{ displayModeBar: false, responsive: true }}
-            style={{ width: "100%", height: "100%" }}
+            style={{ width: "100%", height: 420 }}
           />
 
           <Plot
             data={velData}
-            layout={{ ...velLayout, margin: { t: 40, l: 10, r: 10, b: 10 } }}
+            layout={{ ...velLayout, margin: { t: 40, l: 50, r: 10, b: 40 } }}
             config={{ displayModeBar: false, responsive: true }}
-            style={{ width: "100%", height: "100%" }}
+            style={{ width: "100%", height: 260 }}
           />
-        </>
-      )}
-    </div>
-  );
-}
+        </div>*/

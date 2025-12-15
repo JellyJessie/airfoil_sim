@@ -1,18 +1,18 @@
 // src/foilsim/computeOutputs.js
 //
 // Clean, React-friendly computeOutputs()
-// Fully wired to the new DOM-free physics core in foilPhysics.js
+// Single source of truth for outputs used by OutputsPanel / Geometry / Plots.
+// Fixes:
+//  1) Normalizes state field names + camber/thickness units (fraction -> percent when needed)
+//  2) Uses ONE consistent drag model everywhere (cd = cd0 + cdi when enabled)
+//  3) Computes Cd(α) and L/D(α) once (no redundant recompute loops)
+//  4) Links flow-field circulation to computed CL so Cp/streamlines align with lift
 
 import {
   dynamicPressure,
   liftCoefficient,
-  liftForce,
-  dragForce,
-  calculateLiftCoefficientJoukowski,
   calculateLiftForce,
-  calculateDragCoefficient,
   calculateDragForce,
-  calculateDrag,
   calculateReynolds,
   calculateClAlpha,
   calculateCdAlpha,
@@ -34,9 +34,8 @@ import { Environment, UnitSystem } from "../components/shape.js";
 // -----------------------------------------------------------------------------
 
 function mapUnits(units) {
-  if (units === UnitSystem.IMPERIAL || units === "imperial" || units === 1) {
+  if (units === UnitSystem.IMPERIAL || units === "imperial" || units === 1)
     return UnitSystem.IMPERIAL;
-  }
   return UnitSystem.METRIC;
 }
 
@@ -71,13 +70,56 @@ function mapShape(shapeSelect) {
   }
 }
 
-// -----------------------------------------------------------------------------
-// MAIN COMPUTE FUNCTION
-// -----------------------------------------------------------------------------
+/**
+ * Normalize incoming UI state.
+ * Supports both legacy-ish names and the new React store names.
+ */
+function normalizeInputs(state) {
+  const unitsRaw = state.units;
+  const unitSystem = mapUnits(unitsRaw);
 
-export function computeOutputs(state) {
-  const {
-    // geometry / inputs
+  const environmentSelect = state.environmentSelect ?? state.environment ?? 1;
+  const environment = mapEnvironment(environmentSelect);
+
+  const shapeSelect = state.shapeSelect ?? 1;
+  const shapeType = mapShape(shapeSelect);
+
+  // Angle: state.alphaDeg (new) or state.angleDeg (old)
+  const angleDeg = Number(state.angleDeg ?? state.alphaDeg ?? 0);
+
+  // Camber/thickness: state.m/state.t are usually fractions (0.02, 0.12).
+  // If camberPct/thicknessPct exist, assume they are already percent.
+  const camberPct = Number(
+    state.camberPct ?? (Number.isFinite(state.m) ? state.m * 100 : 0)
+  );
+  const thicknessPct = Number(
+    state.thicknessPct ?? (Number.isFinite(state.t) ? state.t * 100 : 0)
+  );
+
+  // Speed: state.V (new) or state.velocity (old)
+  const velocity = Number(state.velocity ?? state.V ?? 0);
+
+  const altitude = Number(state.altitude ?? 0);
+  const chord = Number(state.chord ?? 1);
+  const span = Number(state.span ?? 1);
+
+  // Area: state.S (new) or state.wingArea (old)
+  const wingArea = Number(state.wingArea ?? state.S ?? 0);
+
+  const radius = Number(state.radius ?? 0);
+  const spin = Number(state.spin ?? 0);
+
+  // Options
+  const induced = state.induced ?? true;
+  const reCorrection = state.reCorrection ?? true;
+  const efficiency = Number(state.efficiency ?? 0.85);
+
+  return {
+    unitSystem,
+    environmentSelect,
+    environment,
+    shapeSelect,
+    shapeType,
     angleDeg,
     camberPct,
     thicknessPct,
@@ -86,31 +128,77 @@ export function computeOutputs(state) {
     chord,
     span,
     wingArea,
-
-    // discrete selections
-    units,
-    environment: environmentSelect,
-    shapeSelect,
-
-    // aero options
-    liftAnalisis, // 1 = stall model, 2 = ideal
-    ar,
-
-    // rotating body (future extension)
     radius,
     spin,
-  } = state;
+    induced,
+    reCorrection,
+    efficiency,
+  };
+}
 
-  // --- normalize selections --------------------------------------------------
+/**
+ * One drag model used everywhere:
+ *   cd = cd0 + cdi (when toggles enabled)
+ */
+function computeDragModel({
+  camberPct,
+  thicknessPct,
+  reynolds,
+  cl,
+  aspectRatio,
+  induced,
+  reCorrection,
+  efficiency,
+}) {
+  // Baseline parasitic drag (FoilSim-style heuristic)
+  let cd0 = 0.01 + 0.002 * (thicknessPct / 12.0) + 0.0001 * Math.abs(camberPct);
 
-  const unitSystem = mapUnits(units);
-  const environment = mapEnvironment(environmentSelect);
-  const shapeType = mapShape(shapeSelect);
+  // Optional Reynolds correction
+  if (reCorrection && reynolds > 0) {
+    cd0 *= Math.pow(50000 / reynolds, 0.11);
+  }
 
-  // --- flow properties -------------------------------------------------------
+  // Induced drag
+  let cdi = 0;
+  if (induced && aspectRatio > 0) {
+    cdi = (cl * cl) / (Math.PI * aspectRatio * (efficiency || 0.85));
+  }
 
-  const q = dynamicPressure(velocity, altitude); // q = 0.5 rho V^2
-  const vconv = 0.6818;
+  return { cd0, cdi, cd: cd0 + cdi };
+}
+
+// -----------------------------------------------------------------------------
+// MAIN COMPUTE FUNCTION
+// -----------------------------------------------------------------------------
+
+export function computeOutputs(state) {
+  const n = normalizeInputs(state);
+
+  const {
+    unitSystem,
+    environment,
+    shapeType,
+    angleDeg,
+    camberPct,
+    thicknessPct,
+    velocity,
+    altitude,
+    chord,
+    span,
+    wingArea,
+    radius,
+    spin,
+    induced,
+    reCorrection,
+    efficiency,
+  } = n;
+
+  // ---------------------------------------------------------------------------
+  // Flow properties
+  // ---------------------------------------------------------------------------
+  const q = dynamicPressure(velocity, altitude); // q = 0.5 rho V^2 (psf-equivalent in this model)
+
+  const vconv = 0.6818; // legacy conversion used in calculateLiftForce/DragForce
   const densityTrop = densitySlugFt3(altitude);
   const densityStrat = densityTrop * 0.9;
 
@@ -125,30 +213,72 @@ export function computeOutputs(state) {
     densityStrat,
   });
 
-  // Lift coefficient (thin airfoil + stall model)
-  const cl = liftCoefficient(angleDeg, camberPct);
-  const getCl = (alphaDeg, camberPct, thicknessPct) =>
-    liftCoefficient(alphaDeg, camberPct, thicknessPct);
-
-  const getCd = (
-    alphaDeg,
-    camberPct,
-    thicknessPct,
-    { reynolds, aspectRatio, efficiency }
-  ) =>
-    calculateDragCoefficient({
-      camberDeg: camberPct,
-      thicknessPct,
-      alphaDeg,
-      reynolds,
-      cl: getCl(alphaDeg, camberPct, thicknessPct),
-      aspectRatio,
-      efficiency,
-    });
+  // ---------------------------------------------------------------------------
+  // Aerodynamics (CL, CD, forces)
+  // ---------------------------------------------------------------------------
+  const cl = liftCoefficient(angleDeg, camberPct, thicknessPct);
 
   const aspectRatio = wingArea > 0 ? (span * span) / wingArea : 0;
 
-  // --- CL–alpha plot  ---------------------------------------------------
+  // Single drag model source-of-truth
+  const { cd0, cdi, cd } = computeDragModel({
+    camberPct,
+    thicknessPct,
+    reynolds,
+    cl,
+    aspectRatio,
+    induced,
+    reCorrection,
+    efficiency,
+  });
+
+  const lift = calculateLiftForce(
+    velocity,
+    altitude,
+    wingArea,
+    vconv,
+    q0T,
+    q0S,
+    cl
+  );
+  const drag = calculateDragForce(
+    velocity,
+    altitude,
+    wingArea,
+    vconv,
+    q0T,
+    q0S,
+    cd
+  );
+
+  const liftOverDrag = drag !== 0 ? lift / drag : 0;
+  const barData = buildLiftDragBarData(lift, drag);
+  const ld = calculateLiftToDrag(lift, drag);
+
+  // ---------------------------------------------------------------------------
+  // Performance plots
+  // ---------------------------------------------------------------------------
+  const getCl = (alpha, camber, thick) => liftCoefficient(alpha, camber, thick);
+
+  const getCd = (
+    alpha,
+    camber,
+    thick,
+    { reynolds, aspectRatio, efficiency }
+  ) => {
+    const clLocal = getCl(alpha, camber, thick);
+    return computeDragModel({
+      camberPct: camber,
+      thicknessPct: thick,
+      reynolds,
+      cl: clLocal,
+      aspectRatio,
+      induced,
+      reCorrection,
+      efficiency,
+    }).cd;
+  };
+
   const clAlpha = calculateClAlpha({
     camberPct,
     thicknessPct,
@@ -156,9 +286,9 @@ export function computeOutputs(state) {
     alphaMin: -10,
     alphaMax: 20,
     step: 1,
-    getCl: (alphaDeg, camberPct) => liftCoefficient(alphaDeg, camberPct),
+    getCl: (alpha, camber) => liftCoefficient(alpha, camber, thicknessPct),
   });
-  // Build Cd(α) and L/D(α)
+
   const cdAlpha = calculateCdAlpha({
     camberPct,
     thicknessPct,
@@ -178,47 +308,42 @@ export function computeOutputs(state) {
     getCd,
   });
 
-  // Drag coefficient
-  const cd = calculateDragCoefficient({
-    camberDeg: camberPct,
-    thicknessPct,
-    alphaDeg: angleDeg,
-    reynolds,
-    cl,
-    aspectRatio,
-  });
+  // Stall detection (first negative slope in Cl-alpha)
+  let stallAlpha = null;
+  for (let i = 1; i < clAlpha.alphas.length; i++) {
+    const dCl = clAlpha.cls[i] - clAlpha.cls[i - 1];
+    if (stallAlpha === null && dCl < 0) {
+      stallAlpha = clAlpha.alphas[i - 1];
+      break;
+    }
+  }
+  const isStalled = stallAlpha !== null && angleDeg >= stallAlpha;
 
-  // Forces
-  const lift = calculateLiftForce(
-    velocity,
-    altitude,
-    wingArea,
-    vconv,
-    q0T,
-    q0S,
-    cl
-  );
+  // Optimal L/D
+  let optimalLD = 0;
+  let optimalAlpha = 0;
+  for (let i = 0; i < ldAlpha.alphas.length; i++) {
+    if (ldAlpha.lds[i] > optimalLD) {
+      optimalLD = ldAlpha.lds[i];
+      optimalAlpha = ldAlpha.alphas[i];
+    }
+  }
 
-  const drag = calculateDragForce(
-    velocity,
-    altitude,
-    wingArea,
-    vconv,
-    q0T,
-    q0S,
-    cd
-  );
+  // ---------------------------------------------------------------------------
+  // Flow field + probes (geometry / Cp visualization)
+  // ---------------------------------------------------------------------------
+  // We link circulation to CL so streamlines/Cp align with lift.
+  // For 2D airfoil: Cl = 2*Gamma / (V*c)  =>  Gamma = 0.5*Cl*V*c
+  const Gamma = 0.5 * cl * velocity * chord;
 
-  const liftOverDrag = drag !== 0 ? lift / drag : 0;
-  const barData = buildLiftDragBarData(lift, drag);
-  const ld = calculateLiftToDrag(lift, drag);
-  // ================= FLOW FIELD SAFETY DEFAULTS =================
+  // The flow-field module uses a non-dimensional circulation term inside uth = ... - gamval/rad.
+  // A reasonable normalization is gamval = Gamma / (2*pi*V) (so it scales with Gamma and keeps units consistent).
+  const gamval = velocity !== 0 ? Gamma / (2.0 * Math.PI * velocity) : 0;
 
-  // These prevent genFlowField crashes if shape system not wired yet
-  const xcval = 0; // center x
-  const ycval = 0; // center y
-  const rval = 1; // cylinder radius
-  const gamval = 0; // circulation
+  // Safety defaults (until you wire a real circle -> airfoil shape system)
+  const xcval = 0;
+  const ycval = 0;
+  const rval = 1;
 
   const flowField = generateFlowField({
     alphaDeg: angleDeg,
@@ -228,24 +353,15 @@ export function computeOutputs(state) {
     gamval,
   });
 
-  // --- build probe arrays for plots + geometry ----------------------------------
-  // foilsimPlots expects:
-  //   xm: 2 x N array (upper/lower rows)
-  //   plp: pressure probe array indexed 0..36 (we keep length 40 for safety)
-  //   plv: velocity probe array indexed 0..36
-  // and uses idx = npt2 - k + 1 (upper) or npt2 + k - 1 (lower). :contentReference[oaicite:3]{index=3}
-
-  const nptc = 37; // same as flowField default nPoints
-  const MAX_J = 40; // safe size (legacy style)
-  const convdr = Math.PI / 180;
-
-  // 1) geometry arrays as 2 x MAX_J (upper/lower rows)
+  // Geometry arrays (NASA-compatible 2 x N)
+  const nptc = 37;
+  const MAX_J = 40;
   const xm = [Array(MAX_J).fill(0), Array(MAX_J).fill(0)];
   const ym = [Array(MAX_J).fill(0), Array(MAX_J).fill(0)];
 
   if (flowField?.bodyPoints?.length) {
-    const n = Math.min(nptc, flowField.bodyPoints.length);
-    for (let i = 0; i < n; i++) {
+    const nn = Math.min(nptc, flowField.bodyPoints.length);
+    for (let i = 0; i < nn; i++) {
       const p = flowField.bodyPoints[i];
       xm[0][i] = p.x;
       ym[0][i] = p.y;
@@ -254,24 +370,22 @@ export function computeOutputs(state) {
     }
   }
 
-  // 2) probe arrays (pressure/velocity)
+  // Probe arrays plv/plp (display units), consistent with Cp:
+  // Cp = 1 - (Vlocal/V)^2 ;  p = p∞ + Cp*q∞
+  const convdr = Math.PI / 180;
   const plv = Array(MAX_J).fill(0);
   const plp = Array(MAX_J).fill(0);
-  // baseline p∞ in display units (psi/kPa)
+
   const pconv = unitSystem === UnitSystem.IMPERIAL ? 14.7 : 101.3;
   const pInfDisplay = pconv;
-
-  // dynamic pressure q∞ in display units (assumes q is psf)
   const qInfDisplay = (q / 2116.0) * pconv;
-
-  // circulation proxy
-  const alphaRad = angleDeg * convdr;
-  const Gamma = 4.0 * Math.PI * velocity * rval * Math.sin(alphaRad);
 
   for (let idx = 0; idx < nptc; idx++) {
     const thetaDeg = (idx * 360.0) / (nptc - 1);
     const thetaRad = thetaDeg * convdr;
+    const alphaRad = angleDeg * convdr;
 
+    // Tangential speed on cylinder surface with circulation
     const vTheta =
       -2.0 * velocity * Math.sin(thetaRad - alphaRad) +
       Gamma / (2.0 * Math.PI * rval);
@@ -281,120 +395,12 @@ export function computeOutputs(state) {
 
     const cp =
       velocity !== 0 ? 1.0 - (vLocal * vLocal) / (velocity * velocity) : 0;
-
     plp[idx] = pInfDisplay + cp * qInfDisplay;
   }
-  // --- structured output for panels -----------------------------------------
-  // ================= PERFORMANCE ANALYSIS =================
-  // --- drag breakdown: Cd0 (parasitic) + Cdi (induced) -----------------------
-  const { induced, reCorrection } = state; // make sure these exist in state
 
-  // Baseline parasitic drag (same as in your faithful model)
-  let cd0 = 0.01 + 0.002 * (thicknessPct / 12.0) + 0.0001 * Math.abs(camberPct);
-
-  // Optional Reynolds correction
-  if (reCorrection && reynolds > 0) {
-    cd0 *= Math.pow(50000 / reynolds, 0.11);
-  }
-
-  // Induced drag term
-  let cdi = 0;
-  if (induced) {
-    const efficiency = 0.85;
-    cdi = (cl * cl) / (Math.PI * aspectRatio * efficiency);
-  }
-
-  // (optional) If you want, you can also recompute cd_total = cd0 + cdi
-  // and compare to your existing `cd` for debugging.
-
-  let optimalLD = 0;
-  let optimalAlpha = 0;
-  let stallAlpha = null;
-
-  // Detect stall by dCl/dα turning negative
-  for (let i = 1; i < clAlpha.alphas.length; i++) {
-    const alphaPrev = clAlpha.alphas[i - 1];
-    const alpha = clAlpha.alphas[i];
-
-    const dCl = clAlpha.cls[i] - clAlpha.cls[i - 1];
-
-    // Stall detection (first slope drop)
-    if (stallAlpha === null && dCl < 0) {
-      stallAlpha = alphaPrev;
-    }
-  }
-
-  // build L/D(α)
-  for (let i = 0; i < clAlpha.alphas.length; i++) {
-    const cl_i = clAlpha.cls[i];
-
-    const cd_i = calculateDragCoefficient({
-      camberDeg: camberPct,
-      thicknessPct,
-      alphaDeg: clAlpha.alphas[i],
-      reynolds,
-      cl: cl_i,
-      aspectRatio,
-    });
-
-    // build Cd(α)
-    const cdAlpha = calculateCdAlpha({
-      camberPct,
-      thicknessPct,
-      velocity,
-      alphaMin: clAlpha.alphas[0],
-      alphaMax: clAlpha.alphas[clAlpha.alphas.length - 1],
-      step: clAlpha.alphas[1] - clAlpha.alphas[0],
-      reynolds,
-      aspectRatio,
-      getCd: (alphaDeg, camberPct, thicknessPct, { reynolds, aspectRatio }) => {
-        const cl = liftCoefficient(alphaDeg, camberPct);
-        return calculateDragCoefficient({
-          camberDeg: camberPct,
-          thicknessPct,
-          alphaDeg,
-          reynolds,
-          cl,
-          aspectRatio,
-        });
-      },
-    });
-
-    // build L/D(α)
-    const ldAlpha = calculateLdAlpha({
-      camberPct,
-      thicknessPct,
-      velocity,
-      alphaMin: clAlpha.alphas[0],
-      alphaMax: clAlpha.alphas[clAlpha.alphas.length - 1],
-      step: clAlpha.alphas[1] - clAlpha.alphas[0],
-      reynolds,
-      aspectRatio,
-      getCl: (alphaDeg, camberPct) => liftCoefficient(alphaDeg, camberPct),
-      getCd: (alphaDeg, camberPct, thicknessPct, { reynolds, aspectRatio }) => {
-        const cl = liftCoefficient(alphaDeg, camberPct);
-        return calculateDragCoefficient({
-          camberDeg: camberPct,
-          thicknessPct,
-          alphaDeg,
-          reynolds,
-          cl,
-          aspectRatio,
-        });
-      },
-    });
-
-    const ld_i = ldAlpha.lds[i];
-
-    if (ld_i > optimalLD) {
-      optimalLD = ld_i;
-      optimalAlpha = ldAlpha.alphas[i];
-    }
-  }
-
-  // Current stall state
-  const isStalled = stallAlpha !== null && angleDeg >= stallAlpha;
-
+  // ---------------------------------------------------------------------------
+  // Return payload
+  // ---------------------------------------------------------------------------
   return {
     // geometry arrays (USED by GeometryPanel + probe overlay)
     xm,
@@ -402,7 +408,7 @@ export function computeOutputs(state) {
     plp,
     plv,
 
-    // ✅ dynamic pressure for Cp (q∞)
+    // dynamic pressure for Cp (q∞)
     q0: q,
 
     // optional debug
@@ -430,9 +436,11 @@ export function computeOutputs(state) {
     cd0,
     cdi,
 
-    // environment
+    // environment (minimal)
     velocity,
     altitude,
+    unitSystem,
+    environment,
 
     // plot panel
     plots: {
@@ -441,28 +449,20 @@ export function computeOutputs(state) {
       ldAlpha,
     },
 
+    // future (optional)
     rotation: {
       radius,
       spin,
     },
 
-    units: unitSystem,
-    environment,
+    // analysis extras
+    isStalled,
+    stallAlpha,
+    optimalAlpha,
+    optimalLD,
+
+    // bar chart helper
+    barData,
+    ld,
   };
 }
-/*
-export function plotGraph({ lift, drag }, plotRef) {
-  if (!plotRef?.current) return;
-
-  const data = [
-    {
-      x: ["Lift", "Drag"],
-      y: [lift, drag],
-      type: "bar",
-    },
-  ];
-
-  Plotly.newPlot(plotRef.current, data);
-}
-
-*/

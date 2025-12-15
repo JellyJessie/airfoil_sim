@@ -2,12 +2,7 @@
 import React, { useState } from "react";
 import { FoilSimProvider, useFoilSim } from "./store/FoilSimContext.jsx";
 import QuickControls from "./components/QuickControls.jsx";
-import { OutputTabs } from "./foilsim/OutputTabs.jsx";
-import PlotButtons from "./components/PlotButtons.jsx";
-import PlotControls from "./foilsim/PlotControls.jsx";
 import AnalysisPanel from "./components/AnalysisPanel.jsx";
-import InputTabs from "./foilsim/InputTabs.jsx";
-import FlowCanvas from "./components/FlowCanvas.jsx";
 import FoilSimPanel from "./components/FoilSimPanel.jsx";
 import OutputsPanel from "./foilsim/OutputsPanel.jsx";
 
