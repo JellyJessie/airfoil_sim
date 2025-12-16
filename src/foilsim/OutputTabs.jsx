@@ -2,7 +2,7 @@ import React from "react";
 import { useFoilSim } from "../store/FoilSimContext";
 
 const OUTPUT_MODES = [
-  { id: 1, key: "gage", label: "Gage" },
+  { id: 1, key: "gauges ", label: "gauges " },
   { id: 2, key: "geometry", label: "Geometry" },
   { id: 3, key: "data", label: "Data" },
   { id: 4, key: "plot", label: "Plot" },

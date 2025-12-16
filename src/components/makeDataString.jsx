@@ -1,3 +1,5 @@
+import { Environment } from "./shape";
+
 export default function makeDataString(state, out) {
   const units = state.units === "imperial" ? 1 : 2;
 
@@ -11,15 +13,6 @@ export default function makeDataString(state, out) {
 
   // Prefer values you already compute in computeOutputs:
   const env = out.envDisplay; // if you have it
-  const envName =
-    state.environmentSelect === 1
-      ? "Standard Earth Atmosphere"
-      : state.environmentSelect === 2
-        ? "Martian Atmosphere"
-        : state.environmentSelect === 3
-          ? "Under mercury"
-          : "Venus Surface";
-
   const shapeName = out.shapeString ?? "—";
 
   const lines = [];
@@ -42,7 +35,7 @@ export default function makeDataString(state, out) {
   }
 
   lines.push(`Angle of attack = ${state.alphaDeg} degrees`);
-  lines.push(envName);
+  lines.push(Environment);
   lines.push(`Altitude = ${state.altitude}${lengthUnit}`);
 
   // If you don’t have envDisplay yet, at least show q0:

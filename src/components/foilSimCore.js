@@ -14,10 +14,10 @@ function normalizeEnvironment(env) {
   }
 
   // numeric or string codes (legacy-style)
-  if (env === 1 || env === "1" || env === "earth") return Environment.EARTH;
-  if (env === 2 || env === "2" || env === "mars") return Environment.MARS;
-  if (env === 3 || env === "3" || env === "mercury") return Environment.MERCURY;
-  if (env === 4 || env === "4" || env === "venus") return Environment.VENUS;
+  if (env === 1 || env === "1" || env === "Earth") return Environment.EARTH;
+  if (env === 2 || env === "2" || env === "Mars") return Environment.MARS;
+  if (env === 3 || env === "3" || env === "Mercury") return Environment.MERCURY;
+  if (env === 4 || env === "4" || env === "Venus") return Environment.VENUS;
 
   // fallback
   return Environment.EARTH;

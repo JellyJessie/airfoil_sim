@@ -1,5 +1,4 @@
 import { computeAirfoil } from "../components/foilSimCore.js";
-import { Environment, UnitSystem, Shape, Airfoil } from "./shape.js";
 
 // ---------- helpers for Plotly traces ----------
 

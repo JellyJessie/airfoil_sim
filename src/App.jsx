@@ -46,7 +46,7 @@ export default function App() {
           <h2>Simulation Plot</h2>
         </div>
 
-        {/* Right side: NASA-style Gage/Geometry/Data/Plot outputs */}
+        {/* Right side: NASA-style gauges /Geometry/Data/Plot outputs */}
         <div className="foilsim-right">
           <div style={{ position: "relative", zIndex: 5000 }}>
             <OutputsPanel /> {/* ✅ now the buttons visibly do something */}

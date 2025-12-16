@@ -2,11 +2,13 @@
 //
 // Clean, React-friendly computeOutputs()
 // Single source of truth for outputs used by OutputsPanel / Geometry / Plots.
-// Fixes:
+//
+// Fixes & guarantees:
 //  1) Normalizes state field names + camber/thickness units (fraction -> percent when needed)
 //  2) Uses ONE consistent drag model everywhere (cd = cd0 + cdi when enabled)
 //  3) Computes Cd(α) and L/D(α) once (no redundant recompute loops)
 //  4) Links flow-field circulation to computed CL so Cp/streamlines align with lift
+//  5) Produces NASA-style probe arrays plp/plv (Cp + velocity ratio) for Geometry/Cp/overlay
 
 import {
   dynamicPressure,
@@ -34,8 +36,9 @@ import { Environment, UnitSystem } from "../components/shape.js";
 // -----------------------------------------------------------------------------
 
 function mapUnits(units) {
-  if (units === UnitSystem.IMPERIAL || units === "imperial" || units === 1)
+  if (units === UnitSystem.IMPERIAL || units === "imperial" || units === 1) {
     return UnitSystem.IMPERIAL;
+  }
   return UnitSystem.METRIC;
 }
 
@@ -109,7 +112,7 @@ function normalizeInputs(state) {
   const radius = Number(state.radius ?? 0);
   const spin = Number(state.spin ?? 0);
 
-  // Options
+  // Options (defaults match your store snippet)
   const induced = state.induced ?? true;
   const reCorrection = state.reCorrection ?? true;
   const efficiency = Number(state.efficiency ?? 0.85);
@@ -167,6 +170,61 @@ function computeDragModel({
   return { cd0, cdi, cd: cd0 + cdi };
 }
 
+/**
+ * NASA-style surface probe sampler (based on legacy getVel):
+ * returns velocity ratio (Vlocal/V∞) and Cp (1 - (Vlocal/V∞)^2) along the mapped surface.
+ */
+function computeSurfaceProbes({
+  alphaDeg,
+  rval,
+  gamval,
+  xcval,
+  ycval,
+  nptc = 37,
+}) {
+  const convdr = Math.PI / 180;
+  const alfrad = convdr * alphaDeg;
+
+  const plvRatio = Array(40).fill(0); // Vlocal/V∞
+  const plcp = Array(40).fill(0); // Cp
+
+  for (let index = 1; index <= nptc; index++) {
+    const theta = ((index - 1) * 360) / (nptc - 1);
+    const thrad = convdr * theta;
+
+    // cylinder plane radius (sample on cylinder surface)
+    let rad = rval;
+
+    // velocity in cylinder plane
+    const ur = Math.cos(thrad - alfrad) * (1.0 - (rval * rval) / (rad * rad));
+    const uth =
+      -Math.sin(thrad - alfrad) * (1.0 + (rval * rval) / (rad * rad)) -
+      gamval / rad;
+
+    const usq = ur * ur + uth * uth;
+
+    // translate cylinder to generate airfoil, then compute Jacobian at that location
+    let xloc = rad * Math.cos(thrad) + xcval;
+    let yloc = rad * Math.sin(thrad) + ycval;
+
+    rad = Math.sqrt(xloc * xloc + yloc * yloc);
+    const thloc = Math.atan2(yloc, xloc);
+
+    const jake1 = 1.0 - Math.cos(2.0 * thloc) / (rad * rad);
+    const jake2 = Math.sin(2.0 * thloc) / (rad * rad);
+    let jakesq = jake1 * jake1 + jake2 * jake2;
+    if (Math.abs(jakesq) <= 0.01) jakesq = 0.01;
+
+    const vsq = usq / jakesq; // (Vlocal/V∞)^2 in this non-dimensional form
+
+    const vRatio = Math.sqrt(Math.max(vsq, 0));
+    plvRatio[index] = vRatio;
+    plcp[index] = 1.0 - vsq;
+  }
+
+  return { plvRatio, plcp };
+}
+
 // -----------------------------------------------------------------------------
 // MAIN COMPUTE FUNCTION
 // -----------------------------------------------------------------------------
@@ -196,7 +254,7 @@ export function computeOutputs(state) {
   // ---------------------------------------------------------------------------
   // Flow properties
   // ---------------------------------------------------------------------------
-  const q = dynamicPressure(velocity, altitude); // q = 0.5 rho V^2 (psf-equivalent in this model)
+  const q = dynamicPressure(velocity, altitude); // q∞ (dynamic pressure, model units)
 
   const vconv = 0.6818; // legacy conversion used in calculateLiftForce/DragForce
   const densityTrop = densitySlugFt3(altitude);
@@ -256,7 +314,7 @@ export function computeOutputs(state) {
   const ld = calculateLiftToDrag(lift, drag);
 
   // ---------------------------------------------------------------------------
-  // Performance plots
+  // Performance plots (computed ONCE)
   // ---------------------------------------------------------------------------
   const getCl = (alpha, camber, thick) => liftCoefficient(alpha, camber, thick);
 
@@ -330,20 +388,19 @@ export function computeOutputs(state) {
   }
 
   // ---------------------------------------------------------------------------
-  // Flow field + probes (geometry / Cp visualization)
+  // Flow field + geometry + probes (geometry / Cp visualization)
   // ---------------------------------------------------------------------------
-  // We link circulation to CL so streamlines/Cp align with lift.
+  // Link circulation to CL so streamlines/Cp align with lift.
   // For 2D airfoil: Cl = 2*Gamma / (V*c)  =>  Gamma = 0.5*Cl*V*c
   const Gamma = 0.5 * cl * velocity * chord;
 
-  // The flow-field module uses a non-dimensional circulation term inside uth = ... - gamval/rad.
-  // A reasonable normalization is gamval = Gamma / (2*pi*V) (so it scales with Gamma and keeps units consistent).
-  const gamval = velocity !== 0 ? Gamma / (2.0 * Math.PI * velocity) : 0;
-
-  // Safety defaults (until you wire a real circle -> airfoil shape system)
+  // Safety defaults (until you wire a real circle->airfoil parameterization)
   const xcval = 0;
   const ycval = 0;
   const rval = 1;
+
+  // Non-dimensional circulation term used by flowField.js in uth = ... - gamval/rad.
+  const gamval = velocity !== 0 ? Gamma / (2.0 * Math.PI * velocity) : 0;
 
   const flowField = generateFlowField({
     alphaDeg: angleDeg,
@@ -370,33 +427,18 @@ export function computeOutputs(state) {
     }
   }
 
-  // Probe arrays plv/plp (display units), consistent with Cp:
-  // Cp = 1 - (Vlocal/V)^2 ;  p = p∞ + Cp*q∞
-  const convdr = Math.PI / 180;
-  const plv = Array(MAX_J).fill(0);
-  const plp = Array(MAX_J).fill(0);
+  // Probes for Geometry/Cp/overlay: Cp + velocity ratio along surface
+  const { plvRatio, plcp } = computeSurfaceProbes({
+    alphaDeg: angleDeg,
+    rval,
+    gamval,
+    xcval,
+    ycval,
+    nptc,
+  });
 
-  const pconv = unitSystem === UnitSystem.IMPERIAL ? 14.7 : 101.3;
-  const pInfDisplay = pconv;
-  const qInfDisplay = (q / 2116.0) * pconv;
-
-  for (let idx = 0; idx < nptc; idx++) {
-    const thetaDeg = (idx * 360.0) / (nptc - 1);
-    const thetaRad = thetaDeg * convdr;
-    const alphaRad = angleDeg * convdr;
-
-    // Tangential speed on cylinder surface with circulation
-    const vTheta =
-      -2.0 * velocity * Math.sin(thetaRad - alphaRad) +
-      Gamma / (2.0 * Math.PI * rval);
-
-    const vLocal = Math.abs(vTheta);
-    plv[idx] = vLocal;
-
-    const cp =
-      velocity !== 0 ? 1.0 - (vLocal * vLocal) / (velocity * velocity) : 0;
-    plp[idx] = pInfDisplay + cp * qInfDisplay;
-  }
+  const plp = plcp; // Cp
+  const plv = plvRatio; // Vlocal/V∞
 
   // ---------------------------------------------------------------------------
   // Return payload
@@ -424,7 +466,7 @@ export function computeOutputs(state) {
     wingArea,
     aspectRatio,
 
-    // aero gage panel
+    // aero gauges  panel
     cl,
     cd,
     lift,

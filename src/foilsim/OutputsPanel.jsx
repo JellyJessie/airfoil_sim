@@ -10,6 +10,10 @@ import { buildVelocityProbePlot } from "../components/foilsimPlots.js";
 import GeometryPanel from "../components/GeometryPanel.jsx";
 import GeometryProbeOverlay from "./GeometryProbeOverlay.jsx";
 import makeDataString from "../components/makeDataString.jsx";
+import {
+  formatDataReport,
+  buildFoilSimCsvRows,
+} from "../physics/plotHelpers.js";
 
 // ---- helpers ----
 function pickSeries(obj, candidates, fallback = []) {
@@ -72,6 +76,38 @@ function makeLinePlot({ title, xTitle, yTitle, x, y, infoLabel }) {
       />
     </div>
   );
+}
+
+function exportText(text) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "foilsim_data.txt";
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function csvEscape(v) {
+  const s = String(v ?? "");
+  // Quote if it contains comma/quote/newline
+  if (/[,"\n]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
+  return s;
+}
+
+function downloadCsv(filename, rows) {
+  const csv = rows.map((r) => r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+
+  URL.revokeObjectURL(url);
 }
 
 function PlotTab({ out }) {
@@ -144,32 +180,73 @@ export default function OutputsPanel() {
 
   // --- Panels ---
   switch (state.outputButton) {
-    case 1: // Gage
+    case 1: {
+      const lift = out?.lift ?? 0;
+      const drag = out?.drag ?? 0;
+
+      const gData = [
+        {
+          type: "bar",
+          orientation: "h",
+          y: ["Lift", "Drag"],
+          x: [lift, drag],
+          text: [
+            `Lift: ${Number(lift).toFixed(2)}`,
+            `Drag: ${Number(drag).toFixed(2)}`,
+          ],
+          textposition: "auto",
+        },
+      ];
+      const unitLabel =
+        state.units === "imperial" || state.units === 1 ? "lb" : "N";
+      const gLayout = {
+        title: { text: "Gauges", x: 0.5 },
+        margin: { t: 70, l: 80, r: 20, b: 60 },
+        xaxis: { title: { text: unitLabel } },
+        height: 320,
+      };
+
       return (
-        <div style={{ display: "grid", gap: 6 }}>
-          <div>CL: {Number.isFinite(out.cl) ? out.cl.toFixed(4) : "—"}</div>
-          <div>CD: {Number.isFinite(out.cd) ? out.cd.toFixed(4) : "—"}</div>
-          <div>
-            Lift: {Number.isFinite(out.lift) ? out.lift.toFixed(2) : "—"}
+        <div style={{ display: "grid", gap: 12 }}>
+          <Plot
+            data={gData}
+            layout={gLayout}
+            config={{ responsive: true, displayModeBar: false }}
+            style={{ width: "100%" }}
+          />
+          <div style={{ display: "grid", gap: 4 }}>
+            <table>
+              <tbody>
+                <tr>
+                  <td>CL : </td>
+                  <td>{out.cl?.toFixed?.(4)}</td>
+                  <td>CD :</td>
+                  <td>{out.cd?.toFixed?.(4)}</td>
+                </tr>
+                <tr>
+                  <td>Lift : </td>
+                  <td>{out.lift?.toFixed?.(2)}</td>
+                  <td>Drag : </td>
+                  <td>{out.drag?.toFixed?.(2)}</td>
+                </tr>
+                <tr>
+                  <td>Re : </td>
+                  <td>{out.reynolds?.toFixed?.(0)}</td>
+                  <td>CD0 : </td>
+                  <td>{out.cd0?.toFixed?.(4)}</td>
+                </tr>
+                <tr>
+                  <td>CDi : </td>
+                  <td>{out.cdi?.toFixed?.(4)}</td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div>
-            Drag: {Number.isFinite(out.drag) ? out.drag.toFixed(2) : "—"}
-          </div>
-          <div>
-            Re: {Number.isFinite(out.reynolds) ? out.reynolds.toFixed(0) : "—"}
-          </div>
-          {Number.isFinite(out.cd0) || Number.isFinite(out.cdi) ? (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.9 }}>
-              <div>
-                CD0: {Number.isFinite(out.cd0) ? out.cd0.toFixed(4) : "—"}
-              </div>
-              <div>
-                CDi: {Number.isFinite(out.cdi) ? out.cdi.toFixed(4) : "—"}
-              </div>
-            </div>
-          ) : null}
         </div>
       );
+    }
 
     case 2: {
       // Geometry (use computeOutputs arrays if available)
@@ -209,18 +286,39 @@ export default function OutputsPanel() {
       );
     }
 
-    case 3: // Data
+    case 3: {
+      // Data
+      const report = formatDataReport(out, state);
+
       return (
-        <div
-          style={{
-            whiteSpace: "pre-wrap",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            fontSize: 12,
-          }}
-        >
-          {makeDataString(state, out)}
+        <div style={{ display: "grid", gap: 12 }}>
+          <pre
+            style={{
+              whiteSpace: "pre-wrap",
+              fontFamily: "serif",
+              fontSize: 16,
+              lineHeight: 1.4,
+              background: "#fff",
+              color: "#000",
+              padding: 16,
+              border: "1px solid #ccc",
+            }}
+          >
+            {report}
+          </pre>
+
+          <button onClick={() => exportText(report)}>Export Data</button>
+          <button
+            onClick={() => {
+              const rows = buildFoilSimCsvRows(out, state);
+              downloadCsv("foilsim_data.csv", rows);
+            }}
+          >
+            Export CSV (Report + Cp Table)
+          </button>
         </div>
       );
+    }
 
     case 4: // Plot
       return <PlotTab out={out} />;

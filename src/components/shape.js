@@ -1,15 +1,15 @@
 import { getAtmosphere } from "./environment.js";
 
 export const UnitSystem = Object.freeze({
-  IMPERIAL: "imperial", // original "english"
-  METRIC: "metric",
+  IMPERIAL: "Imperial", // original "english"
+  METRIC: "Metric",
 });
 
 export const Environment = Object.freeze({
-  EARTH: "earth",
-  MARS: "mars",
-  MERCURY: "mercury",
-  VENUS: "venus",
+  EARTH: "Earth",
+  MARS: "Mars",
+  MERCURY: "Mercury",
+  VENUS: "Venus",
 });
 
 export function velocityConv(units) {
