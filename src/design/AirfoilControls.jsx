@@ -1,9 +1,17 @@
 import React from "react";
 import { AirfoilProvider, useAirfoil } from "../state/airfoilStore.jsx";
 
+import React from "react";
+import { useFoilSim } from "../foilsim/FoilSimContext"; // adjust path
+
 export default function AirfoilControls() {
-  const { state, set, toggleUnits } = useAirfoil();
-  const u = state.units;
+  const { state, setUnits, dispatch } = useFoilSim();
+  const u = state.units; // "imperial" | "metric"
+
+  const setNum = (key) => (e) => {
+    const v = Number(e.target.value);
+    dispatch({ type: "SET_INPUT", key, value: Number.isFinite(v) ? v : 0 });
+  };
 
   return (
     <div className="af-panel">
@@ -11,46 +19,40 @@ export default function AirfoilControls() {
 
       <div className="af-field">
         <label>Units</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={toggleUnits}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            onClick={() => setUnits(u === "metric" ? "imperial" : "metric")}
+          >
             Switch to {u === "metric" ? "Imperial" : "Metric"}
           </button>
-          <span style={{ alignSelf: "center" }}>Current: {u}</span>
+          <span>Current: {u}</span>
         </div>
       </div>
 
-      <h3>Geometry (NACA MPXX)</h3>
+      <h3>Geometry</h3>
       <div className="af-grid2">
         <label>Chord ({u === "metric" ? "m" : "ft"})</label>
         <input
           type="number"
           step="0.01"
           value={state.chord}
-          onChange={(e) => set("chord", parseFloat(e.target.value || "0"))}
+          onChange={setNum("chord")}
         />
 
-        <label>Thickness ratio (t)</label>
+        <label>Thickness (% chord)</label>
         <input
           type="number"
-          step="0.005"
-          value={state.t}
-          onChange={(e) => set("t", parseFloat(e.target.value || "0"))}
+          step="0.1"
+          value={state.thicknessPct}
+          onChange={setNum("thicknessPct")}
         />
 
-        <label>Max camber (m)</label>
+        <label>Camber (% chord)</label>
         <input
           type="number"
-          step="0.005"
-          value={state.m}
-          onChange={(e) => set("m", parseFloat(e.target.value || "0"))}
-        />
-
-        <label>Camber position (p)</label>
-        <input
-          type="number"
-          step="0.05"
-          value={state.p}
-          onChange={(e) => set("p", parseFloat(e.target.value || "0"))}
+          step="0.1"
+          value={state.camberPct}
+          onChange={setNum("camberPct")}
         />
 
         <label>Angle of attack (°)</label>
@@ -58,42 +60,34 @@ export default function AirfoilControls() {
           type="number"
           step="0.5"
           value={state.angleDeg}
-          onChange={(e) => set("angleDeg", parseFloat(e.target.value || "0"))}
+          onChange={setNum("angleDeg")}
         />
       </div>
 
-      <h3>Flow</h3>
+      <h3>Flight</h3>
       <div className="af-grid2">
-        <label>Velocity V ({u === "metric" ? "m/s" : "ft/s"})</label>
+        <label>Velocity ({u === "metric" ? "km/h" : "mph"})</label>
         <input
           type="number"
           step="0.1"
-          value={state.V}
-          onChange={(e) => set("V", parseFloat(e.target.value || "0"))}
+          value={state.velocity}
+          onChange={setNum("velocity")}
         />
 
-        <label>Density ρ ({u === "metric" ? "kg/m³" : "slug/ft³"})</label>
+        <label>Altitude ({u === "metric" ? "m" : "ft"})</label>
         <input
           type="number"
-          step="0.001"
-          value={state.rho}
-          onChange={(e) => set("rho", parseFloat(e.target.value || "0"))}
+          step="1"
+          value={state.altitude}
+          onChange={setNum("altitude")}
         />
 
-        <label>Viscosity μ ({u === "metric" ? "Pa·s" : "lbf·s/ft²"})</label>
-        <input
-          type="number"
-          step="1e-6"
-          value={state.mu}
-          onChange={(e) => set("mu", parseFloat(e.target.value || "0"))}
-        />
-
-        <label>Wing area S ({u === "metric" ? "m²" : "ft²"})</label>
+        <label>Wing area ({u === "metric" ? "sq m" : "sq ft"})</label>
         <input
           type="number"
           step="0.01"
-          value={state.S}
-          onChange={(e) => set("S", parseFloat(e.target.value || "0"))}
+          value={state.wingArea}
+          onChange={setNum("wingArea")}
         />
       </div>
     </div>

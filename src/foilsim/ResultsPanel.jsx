@@ -5,7 +5,7 @@ import { useFoilSim } from "../store/FoilSimContext";
 export default function ResultsPanel() {
   const { state } = useFoilSim();
   const {
-    shapeString,
+    shapeSelect,
     lift,
     drag,
     cLift,
@@ -19,7 +19,9 @@ export default function ResultsPanel() {
 
   return (
     <div className="af-panel">
-      <h2 className="af-title">{shapeString}</h2>
+      <h2 className="af-title">
+        <strong>{shapeSelect}</strong>
+      </h2>
       <p>Lift: {lift ?? 0}</p>
       <p>Drag: {drag ?? 0}</p>
       <p>CL: {cLift ?? 0}</p>

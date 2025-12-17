@@ -1,8 +1,8 @@
 import { getAtmosphere } from "./environment.js";
 
 export const UnitSystem = Object.freeze({
-  IMPERIAL: "Imperial", // original "english"
-  METRIC: "Metric",
+  IMPERIAL: "imperial", // original "english"
+  METRIC: "metric",
 });
 
 export const Environment = Object.freeze({

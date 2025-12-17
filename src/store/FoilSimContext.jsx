@@ -85,8 +85,69 @@ function foilSimReducer(state, action) {
     case "SET_ENVIRONMENT":
       return { ...state, environment: action.environment };
 
-    case "SET_UNITS":
-      return { ...state, units: action.units };
+    case "SET_UNITS": {
+      const nextUnits = action.units; // "imperial" | "metric"
+      const prevUnits = state.units ?? "imperial";
+      if (nextUnits === prevUnits) return state;
+
+      const mph_to_kmh = (v) => v * 1.60934;
+      const kmh_to_mph = (v) => v / 1.60934;
+
+      const ft_to_m = (x) => x * 0.3048;
+      const m_to_ft = (x) => x / 0.3048;
+
+      const sqft_to_sqm = (a) => a * 0.092903;
+      const sqm_to_sqft = (a) => a / 0.092903;
+
+      const toMetric = prevUnits === "imperial" && nextUnits === "metric";
+      const toImperial = prevUnits === "metric" && nextUnits === "imperial";
+
+      const velocity = Number(state.velocity ?? 0);
+      const altitude = Number(state.altitude ?? 0);
+      const chord = Number(state.chord ?? 1);
+      const span = Number(state.span ?? 1);
+      const wingArea = Number(state.wingArea ?? chord * span);
+
+      const velocity2 = toMetric
+        ? mph_to_kmh(velocity)
+        : toImperial
+          ? kmh_to_mph(velocity)
+          : velocity;
+
+      const altitude2 = toMetric
+        ? ft_to_m(altitude)
+        : toImperial
+          ? m_to_ft(altitude)
+          : altitude;
+
+      const chord2 = toMetric
+        ? ft_to_m(chord)
+        : toImperial
+          ? m_to_ft(chord)
+          : chord;
+
+      const span2 = toMetric
+        ? ft_to_m(span)
+        : toImperial
+          ? m_to_ft(span)
+          : span;
+
+      const wingArea2 = toMetric
+        ? sqft_to_sqm(wingArea)
+        : toImperial
+          ? sqm_to_sqft(wingArea)
+          : wingArea;
+
+      return {
+        ...state,
+        units: nextUnits,
+        velocity: velocity2,
+        altitude: altitude2,
+        chord: chord2,
+        span: span2,
+        wingArea: wingArea2,
+      };
+    }
 
     case "SET_PLOT":
       return { ...state, plot: action.plot };
@@ -222,6 +283,7 @@ export function FoilSimProvider({ children }) {
   const value = {
     state,
     outputs, // ← NEW: full aero + geometry + environment
+    setUnits,
     shape, // optional: low-level Shape for experiments
     derivedShape, // optional: e.g. Reynolds from core Shape
     derived, // your computeAirfoil() results

@@ -28,13 +28,3 @@ export default function QuickControls() {
     </div>
   );
 }
-
-/*
-<ShapeSelect />
-inside the FoilSimPanel
-
-<section style={{ marginBottom: "1rem" }}>
-  <ShapeSelect />
-</section>
-
-*/

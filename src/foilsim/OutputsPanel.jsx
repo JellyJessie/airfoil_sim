@@ -142,7 +142,7 @@ function PlotTab({ out }) {
         yTitle: "CL",
         x: alphasCL,
         y: cls,
-        infoLabel: `alphasCL (from out.plots.clAlpha)`,
+        infoLabel: `α(deg) .vs. CL`,
       })}
 
       {makeLinePlot({
@@ -151,7 +151,7 @@ function PlotTab({ out }) {
         yTitle: "CD",
         x: alphasCD,
         y: cds,
-        infoLabel: `alphasCD (from out.plots.cdAlpha)`,
+        infoLabel: `α(deg) .vs. CD`,
       })}
 
       {makeLinePlot({
@@ -160,7 +160,7 @@ function PlotTab({ out }) {
         yTitle: "L/D",
         x: alphasLD,
         y: lds,
-        infoLabel: `alphasLD (from out.plots.ldAlpha)`,
+        infoLabel: `α(deg) .vs. L/D`,
       })}
     </div>
   );
@@ -200,49 +200,66 @@ export default function OutputsPanel() {
       const unitLabel =
         state.units === "imperial" || state.units === 1 ? "lb" : "N";
       const gLayout = {
-        title: { text: "Gauges", x: 0.5 },
+        title: { text: "Lift and Drag", x: 0.5 },
         margin: { t: 70, l: 80, r: 20, b: 60 },
-        xaxis: { title: { text: unitLabel } },
         height: 320,
+        xaxis: {
+          title: { text: unitLabel },
+          tickformat: ".2f", // show decimals on ticks
+          ticksuffix: ` ${unitLabel}`, // add units to tick labels
+        },
       };
 
       return (
-        <div style={{ display: "grid", gap: 12 }}>
-          <Plot
-            data={gData}
-            layout={gLayout}
-            config={{ responsive: true, displayModeBar: false }}
-            style={{ width: "100%" }}
-          />
-          <div style={{ display: "grid", gap: 4 }}>
-            <table>
-              <tbody>
-                <tr>
-                  <td>CL : </td>
-                  <td>{out.cl?.toFixed?.(4)}</td>
-                  <td>CD :</td>
-                  <td>{out.cd?.toFixed?.(4)}</td>
-                </tr>
-                <tr>
-                  <td>Lift : </td>
-                  <td>{out.lift?.toFixed?.(2)}</td>
-                  <td>Drag : </td>
-                  <td>{out.drag?.toFixed?.(2)}</td>
-                </tr>
-                <tr>
-                  <td>Re : </td>
-                  <td>{out.reynolds?.toFixed?.(0)}</td>
-                  <td>CD0 : </td>
-                  <td>{out.cd0?.toFixed?.(4)}</td>
-                </tr>
-                <tr>
-                  <td>CDi : </td>
-                  <td>{out.cdi?.toFixed?.(4)}</td>
-                  <td></td>
-                  <td></td>
-                </tr>
-              </tbody>
-            </table>
+        <div style={{ display: "grid", gap: 16 }}>
+          <div
+            style={{
+              border: "1px solid #ddd",
+              borderRadius: 12,
+              padding: 12,
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            <h3 style={{ margin: "6px 0 0" }}>Simulation Plot</h3>
+            <div style={{ display: "grid", gap: 12 }}>
+              <Plot
+                data={gData}
+                layout={gLayout}
+                config={{ responsive: true, displayModeBar: false }}
+                style={{ width: "100%" }}
+              />
+              <div style={{ display: "grid", gap: 4 }}>
+                <table>
+                  <tbody>
+                    <tr>
+                      <td>CL : </td>
+                      <td>{out.cl?.toFixed?.(4)}</td>
+                      <td>CD :</td>
+                      <td>{out.cd?.toFixed?.(4)}</td>
+                    </tr>
+                    <tr>
+                      <td>Lift : </td>
+                      <td>{out.lift?.toFixed?.(2)}</td>
+                      <td>Drag : </td>
+                      <td>{out.drag?.toFixed?.(2)}</td>
+                    </tr>
+                    <tr>
+                      <td>Re : </td>
+                      <td>{out.reynolds?.toFixed?.(0)}</td>
+                      <td>CD0 : </td>
+                      <td>{out.cd0?.toFixed?.(4)}</td>
+                    </tr>
+                    <tr>
+                      <td>CDi : </td>
+                      <td>{out.cdi?.toFixed?.(4)}</td>
+                      <td></td>
+                      <td></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       );

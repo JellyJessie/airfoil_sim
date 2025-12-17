@@ -23,7 +23,7 @@ export function buildLiftDragBarData(lift, drag) {
 
 export function formatDataReport(out, state) {
   const {
-    shapeType,
+    shapeSelect,
     camberPct,
     thicknessPct,
     chord,
@@ -37,6 +37,7 @@ export function formatDataReport(out, state) {
     drag,
   } = out;
 
+  const shapeString = "Joukowski Airfoil";
   const isImperial = state.units === "imperial";
 
   const lengthUnit = isImperial ? "ft" : "m";
@@ -48,7 +49,7 @@ export function formatDataReport(out, state) {
   const tempUnit = isImperial ? "F" : "C";
 
   return `
-  Joukowski Airfoil
+  ${shapeString}   on   ${environment}
   Camber = ${camberPct.toFixed(1)} % chord, Thickness = ${thicknessPct.toFixed(
     1
   )} % chord
@@ -57,7 +58,6 @@ export function formatDataReport(out, state) {
   )} ${lengthUnit}
   Surface Area = ${wingArea.toFixed(2)} ${areaUnit}
   Angle of attack = ${angleDeg.toFixed(1)} degrees
-  ${environment}
   Altitude = ${altitude.toFixed(0)} ${lengthUnit}
   Speed = ${velocity.toFixed(1)} ${speedUnit}
 

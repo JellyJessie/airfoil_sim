@@ -13,7 +13,7 @@ export default function makeDataString(state, out) {
 
   // Prefer values you already compute in computeOutputs:
   const env = out.envDisplay; // if you have it
-  const shapeName = out.shapeString ?? "—";
+  const shapeName = out.shapeSelect ?? "—";
 
   const lines = [];
 

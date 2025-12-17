@@ -50,7 +50,7 @@ export const globals = {
   globalPressure: 1,
 
   // UI strings
-  shapeString: "Joukowski Airfoil",
+  shapeSelect: "Joukowski Airfoil",
   lenghtUnit: "ft",
   forceUnit: "lbs",
   velocityUnits: " mph",

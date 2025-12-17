@@ -40,18 +40,16 @@ export default function App() {
   return (
     <FoilSimProvider>
       <div className="app foilsim-layout">
+        <FoilSimPanel />
         {/* Left side: controls */}
-        <AppInner />
-        <div className="foilsim-left">
-          <h2>Simulation Plot</h2>
-        </div>
-
-        {/* Right side: NASA-style gauges /Geometry/Data/Plot outputs */}
+        {/* <AppInner /> */}
+        {/* LEFT: unified controls */}
+        {/* Right side: NASA-style gauges /Geometry/Data/Plot outputs 
         <div className="foilsim-right">
           <div style={{ position: "relative", zIndex: 5000 }}>
-            <OutputsPanel /> {/* ✅ now the buttons visibly do something */}
+            <OutputsPanel /> 
           </div>
-        </div>
+        </div>  */}
       </div>
     </FoilSimProvider>
   );

@@ -5,6 +5,8 @@ import Design3D from "../design/Design3D.jsx"; // we’ll patch it to accept pro
 import AnalysisPanel from "./AnalysisPanel.jsx";
 import FlowCanvas from "./FlowCanvas.jsx";
 import OutputTabs from "../foilsim/OutputTabs.jsx";
+import FlightPanel from "../foilsim/FlightPanel.jsx";
+import OutputsPanel from "../foilsim/OutputsPanel.jsx";
 
 // ---------------- NACA 4 helpers (from your DesignApp) ----------------
 function deg2rad(d) {
@@ -133,7 +135,7 @@ function AngleControl() {
 }
 
 export default function FoilSimPanel() {
-  const { state, dispatch } = useFoilSim();
+  const { state, setUnits, dispatch } = useFoilSim();
   const fileInputRef = useRef(null);
 
   // ---- SINGLE UI SOURCE (Design + Flight) ----
@@ -260,6 +262,24 @@ export default function FoilSimPanel() {
     setIfNum("wingArea", src.wingArea);
   };
 
+  const getUnitLabel = (unitType) => {
+    const isMetric = state.units === "metric";
+    switch (unitType) {
+      case "length":
+        return isMetric ? "m" : "ft";
+      case "velocity":
+        return isMetric ? "m/s" : "ft/s";
+      case "area":
+        return isMetric ? "m²" : "ft²";
+      case "density":
+        return isMetric ? "kg/m³" : "slug/ft³";
+      case "viscosity":
+        return isMetric ? "Pa·s" : "lbf·s/ft²";
+      default:
+        return "";
+    }
+  };
+
   const onPickImport = () => fileInputRef.current?.click();
 
   const onFileChange = (e) => {
@@ -269,7 +289,6 @@ export default function FoilSimPanel() {
       e.target.value = "";
     });
   };
-
   const err = results?.__error;
 
   return (
@@ -285,6 +304,15 @@ export default function FoilSimPanel() {
         <h2 style={{ margin: 0 }}>Airfoil Design & Simulation</h2>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            onClick={() =>
+              setUnits(state.units === "metric" ? "imperial" : "metric")
+            }
+          >
+            Current: <strong>{state.units}</strong>, Switch to{" "}
+            {state.units === "metric" ? "imperial" : "metric"}
+          </button>
+
           <button onClick={resetAll} title="Reset">
             ↺ Reset
           </button>
@@ -329,7 +357,7 @@ export default function FoilSimPanel() {
             <h3 style={{ margin: "6px 0 0" }}>Design</h3>
 
             <label>
-              Chord (m)
+              Chord ({getUnitLabel("length")})
               <input
                 type="number"
                 step="0.01"
@@ -346,7 +374,7 @@ export default function FoilSimPanel() {
             </label>
 
             <label>
-              Span (m)
+              Span ({getUnitLabel("length")})
               <input
                 type="number"
                 step="0.1"
@@ -436,9 +464,9 @@ export default function FoilSimPanel() {
                 style={{ width: "100%" }}
               />
             </label>
-
+            {/*  <FlightPanel />; */}
             <label>
-              Velocity
+              Velocity({getUnitLabel("velocity")})
               <input
                 type="number"
                 step="1"
@@ -453,9 +481,8 @@ export default function FoilSimPanel() {
                 style={{ width: "100%" }}
               />
             </label>
-
             <label>
-              Altitude (ft)
+              Altitude ({getUnitLabel("length")})
               <input
                 type="number"
                 step="100"
@@ -470,9 +497,8 @@ export default function FoilSimPanel() {
                 style={{ width: "100%" }}
               />
             </label>
-
             <label>
-              Wing area
+              Wing area ({getUnitLabel("area")})
               <input
                 type="number"
                 step="0.1"
@@ -488,7 +514,13 @@ export default function FoilSimPanel() {
               />
             </label>
           </div>
-          {/* results box */}
+
+          <div className="foilsim-right">
+            <div style={{ position: "relative", zIndex: 5000 }}>
+              <OutputsPanel /> {/* ✅ now the buttons visibly do something */}
+            </div>
+          </div>
+          {/* results box 
           <div
             style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12 }}
           >
@@ -538,7 +570,7 @@ export default function FoilSimPanel() {
             style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12 }}
           >
             <AnalysisPanel />
-          </div>
+          </div>*/}
         </div>
 
         {/* RIGHT: 2D preview + 3D view underneath */}
@@ -595,6 +627,7 @@ export default function FoilSimPanel() {
               }}
             >
               <div style={{ marginTop: 12 }}>
+                <h3 style={{ marginTop: 0 }}>3D Preview</h3>
                 <Design3D
                   angleDeg={angleDeg}
                   chord={chord}

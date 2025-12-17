@@ -13,7 +13,7 @@ export default function Controls() {
         <label>Units</label>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={toggleUnits}>
-            Switch to {u === "metric" ? "Imperial" : "Metric"}
+            Switch to {u === "metric" ? "imperial" : "metric"}
           </button>
           <span style={{ alignSelf: "center" }}>Current: {u}</span>
         </div>
