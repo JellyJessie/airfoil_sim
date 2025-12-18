@@ -382,13 +382,7 @@ export function getGamVal(angleDeg, thicknessPct, camberPct) {
 // ============================================================================
 // LIFT COEFFICIENT (JOUKOWSKI + STALL + AR CORRECTION)
 // ============================================================================
-
-// REPLACES: calculateLiftCoefficient()
-export function calculateLiftCoefficientJoukowski(
-  angleDeg,
-  camberPct,
-  thicknessPct
-) {
+export function calculateLiftCoefficient(angleDeg, camberPct, thicknessPct) {
   const convdr = getConvdr();
   const ycval = getycVal(camberPct);
   const rval = getrVal(thicknessPct, camberPct);
@@ -593,7 +587,7 @@ export function calculateCdAlpha({
   getCd,
 }) {
   if (typeof getCd !== "function") {
-    throw new Error("calculateCdAlphaSweep: getCd must be a function");
+    throw new Error("calculateCdAlpha: getCd must be a function");
   }
 
   const alphas = [];

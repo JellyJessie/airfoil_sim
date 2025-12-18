@@ -1,63 +1,71 @@
 // src/foilsim/FlowCanvas.jsx
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useMemo, useState } from "react";
 import { useFoilSim } from "../store/FoilSimContext";
 
-// Timer function used to call the redraw function
-// Redraw is dependant on the velocity input
-function timer() {
-  var timer = 100 - int((0.227 * velocity) / 0.6818);
-  var myVar = setTimeout(redraw, timer);
+function rotatePoint(p, deg) {
+  const a = (deg * Math.PI) / 180;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return { x: p.x * c - p.y * s, y: p.x * s + p.y * c };
 }
 
-// Helper: draw a polygon (replacement for old p5 polygon())
-function drawPolygon(ctx, x, y, radius, npoints) {
-  const TWO_PI = Math.PI * 2;
-  const angleStep = TWO_PI / npoints;
-
-  ctx.beginPath();
-  for (let a = 0; a <= TWO_PI + 1e-6; a += angleStep) {
-    const sx = x + Math.cos(a) * radius;
-    const sy = y + Math.sin(a) * radius;
-    if (a === 0) {
-      ctx.moveTo(sx, sy);
-    } else {
-      ctx.lineTo(sx, sy);
-    }
-  }
-  ctx.closePath();
-  ctx.stroke();
+function rotatePolyline(points, deg) {
+  return points.map((p) => rotatePoint(p, deg));
 }
 
 export default function FlowCanvas() {
   const canvasRef = useRef(null);
-  const { outputs } = useFoilSim(); // adjust if your context shape is different
+  const { outputs } = useFoilSim();
 
-  // 🕒 frame counter used like "redraw" driver
   const [frame, setFrame] = useState(0);
+  const [displayMode, setDisplayMode] = useState("streamlines");
+  // "streamlines" | "moving" | "freeze"
 
-  // 🕒 React-ified version of the old timer()
+  // ----------------------------
+  // Animation driver (like old timer/redraw)
+  // ----------------------------
   useEffect(() => {
     if (!outputs) return;
+    if (displayMode === "freeze") return;
 
-    const velocity = outputs.velocity ?? 0; // mph-equivalent, like legacy
-    if (velocity <= 0) return; // no animation if no flow
+    const velocity = outputs.velocity ?? 0;
+    if (velocity <= 0) return;
 
-    // legacy: timer = 100 - int((0.227 * velocity) / 0.6818);
+    // legacy-ish: timer = 100 - int((0.227 * velocity) / 0.6818)
     let delay = 100 - Math.floor((0.227 * velocity) / 0.6818);
-
-    // keep it sane
     if (!Number.isFinite(delay)) return;
-    if (delay < 10) delay = 10;
-    if (delay > 1000) delay = 1000;
+    delay = Math.max(10, Math.min(1000, delay));
 
-    const id = setTimeout(() => {
-      setFrame((f) => f + 1); // triggers a redraw via the draw effect
-    }, delay);
-
+    const id = setTimeout(() => setFrame((f) => f + 1), delay);
     return () => clearTimeout(id);
-  }, [outputs?.velocity, frame]); // depend on velocity + frame (like chained timer)
+  }, [outputs?.velocity, frame, displayMode, outputs]);
 
-  // Drawing effect – runs on outputs change AND each "frame"
+  // ----------------------------
+  // Pull flow data
+  // ----------------------------
+  const flowField = outputs?.flowField;
+  const alphaDeg = outputs?.angleDeg ?? outputs?.alphaDeg ?? 0;
+
+  // Visualization model:
+  // - Streamlines are drawn unrotated (fixed flow direction)
+  // - Airfoil rotates with AoA
+  const streamlines = flowField?.streamlines ?? [];
+  // Prefer NASA-style airfoil surface geometry from computeOutputs (much cleaner)
+  const xm = outputs?.xm?.[0] ?? []; // one row is fine for drawing outline
+  const ym = outputs?.ym?.[0] ?? [];
+
+  let bodyPoints = [];
+  if (xm.length && ym.length && xm.length === ym.length) {
+    bodyPoints = xm.map((x, i) => ({ x, y: ym[i] }));
+  } else {
+    // fallback
+    const bodyPoints0 = flowField?.bodyPoints ?? [];
+    bodyPoints = alphaDeg ? rotatePolyline(bodyPoints0, alphaDeg) : bodyPoints0;
+  }
+
+  // ----------------------------
+  // Draw effect
+  // ----------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -68,15 +76,12 @@ export default function FlowCanvas() {
     const width = canvas.width;
     const height = canvas.height;
 
-    // clear
+    // Clear and background
     ctx.clearRect(0, 0, width, height);
-
-    const flowField = outputs?.flowField;
-    const bodyPoints = flowField?.bodyPoints ?? [];
-    const streamlines = flowField?.streamlines ?? [];
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, width, height);
 
     if (!bodyPoints.length && !streamlines.length) {
-      // "No flow data" label
       ctx.fillStyle = "#888";
       ctx.font = "14px system-ui";
       ctx.textAlign = "center";
@@ -85,23 +90,27 @@ export default function FlowCanvas() {
       return;
     }
 
-    // ---------- compute bounds & scale ----------
+    // Compute bounds for scaling
     let minX = Infinity,
       maxX = -Infinity,
       minY = Infinity,
       maxY = -Infinity;
+    const allPoints = [
+      ...bodyPoints,
+      ...bodyPoints,
+      ...bodyPoints, // triple-weight airfoil in bounds
+      ...streamlines.flat().filter(Boolean),
+    ];
 
-    const allPoints = [...bodyPoints, ...streamlines.flat()];
-
-    allPoints.forEach((p) => {
-      if (!p) return;
+    for (const p of allPoints) {
+      if (!p) continue;
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
       if (p.y < minY) minY = p.y;
       if (p.y > maxY) maxY = p.y;
-    });
+    }
 
-    if (!isFinite(minX) || !isFinite(maxX)) return;
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return;
 
     const padding = 20;
     const spanX = maxX - minX || 1;
@@ -119,56 +128,152 @@ export default function FlowCanvas() {
       y: cy - (p.y - (minY + maxY) / 2) * scale,
     });
 
-    // ---------- draw background ----------
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, width, height);
-
-    // ---------- draw streamlines ----------
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(255, 255, 0, 0.7)";
-
-    streamlines.forEach((line) => {
-      if (!line.length) return;
+    // ---- helpers ----
+    const drawPolyline = (line) => {
+      if (!line?.length) return;
       ctx.beginPath();
-      line.forEach((p, idx) => {
-        const mp = mapPoint(p);
-        if (idx === 0) ctx.moveTo(mp.x, mp.y);
+      for (let i = 0; i < line.length; i++) {
+        const mp = mapPoint(line[i]);
+        if (i === 0) ctx.moveTo(mp.x, mp.y);
         else ctx.lineTo(mp.x, mp.y);
-      });
+      }
       ctx.stroke();
-    });
+    };
 
-    // ---------- draw airfoil/body ----------
+    // Classic FoilSim-style moving dashes along a streamline polyline (fast)
+    const drawMovingDashes = (line) => {
+      if (!line?.length) return;
+
+      // ---- tune these ----
+      const sampleStep = 3; // fewer points = faster
+      const dashLen = 6; // px
+      const gapLen = 10; // px
+      const speed = 2.0; // px/frame
+      // --------------------
+
+      // Map streamline to screen once (so dash lengths are in pixels)
+      const pts = [];
+      for (let i = 0; i < line.length; i += sampleStep) {
+        pts.push(mapPoint(line[i]));
+      }
+      if (pts.length < 2) return;
+
+      // Cumulative arc length
+      const s = [0];
+      let total = 0;
+      for (let i = 1; i < pts.length; i++) {
+        total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        s.push(total);
+      }
+      if (total <= 1e-6) return;
+
+      const period = dashLen + gapLen;
+      const offset = (-frame * speed) % period;
+
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 2; // was 2
+      ctx.lineCap = "round";
+
+      for (let start = -offset; start < total; start += period) {
+        const end = start + dashLen;
+        if (end <= 0) continue;
+        if (start >= total) break;
+
+        const a0 = Math.max(0, start);
+        const a1 = Math.min(total, end);
+
+        ctx.beginPath();
+        let started = false;
+
+        for (let i = 1; i < pts.length; i++) {
+          const s0 = s[i - 1];
+          const s1 = s[i];
+          if (s1 < a0) continue;
+          if (s0 > a1) break;
+
+          // enter
+          if (!started) {
+            const t = (a0 - s0) / (s1 - s0 || 1);
+            const x = pts[i - 1].x + t * (pts[i].x - pts[i - 1].x);
+            const y = pts[i - 1].y + t * (pts[i].y - pts[i - 1].y);
+            ctx.moveTo(x, y);
+            started = true;
+          }
+
+          // exit
+          if (s1 >= a1) {
+            const t = (a1 - s0) / (s1 - s0 || 1);
+            const x = pts[i - 1].x + t * (pts[i].x - pts[i - 1].x);
+            const y = pts[i - 1].y + t * (pts[i].y - pts[i - 1].y);
+            ctx.lineTo(x, y);
+            break;
+          } else {
+            ctx.lineTo(pts[i].x, pts[i].y);
+          }
+        }
+
+        if (started) ctx.stroke();
+      }
+    };
+
+    // ----------------------------
+    // Draw streamlines / dashes
+    // ----------------------------
+    if (displayMode === "streamlines") {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 255, 0, 0.7)";
+      for (const line of streamlines) drawPolyline(line);
+    } else {
+      // moving or freeze: faint base lines + moving dashes
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 255, 0, 0.35)";
+      for (const line of streamlines) drawPolyline(line);
+
+      for (const line of streamlines) drawMovingDashes(line);
+    }
+
+    // ----------------------------
+    // Draw airfoil/body
+    // ----------------------------
     if (bodyPoints.length) {
       ctx.strokeStyle = "cyan";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      bodyPoints.forEach((p, idx) => {
-        const mp = mapPoint(p);
-        if (idx === 0) ctx.moveTo(mp.x, mp.y);
+      for (let i = 0; i < bodyPoints.length; i++) {
+        const mp = mapPoint(bodyPoints[i]);
+        if (i === 0) ctx.moveTo(mp.x, mp.y);
         else ctx.lineTo(mp.x, mp.y);
-      });
+      }
       ctx.closePath();
       ctx.stroke();
     }
-
-    // Optional: draw something using drawPolygon()
-    // const centerMapped = mapPoint({ x: 0, y: 0 });
-    // ctx.strokeStyle = "red";
-    // drawPolygon(ctx, centerMapped.x, centerMapped.y, 5, 20);
-  }, [outputs, frame]); // 🕒 depend on frame so timer drives new draws
+  }, [bodyPoints, streamlines, frame, displayMode]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={320}
-      height={240}
-      style={{
-        width: "100%",
-        maxWidth: 400,
-        border: "1px solid #444",
-        background: "black",
-      }}
-    />
+    <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button onClick={() => setDisplayMode("streamlines")}>
+          Streamlines
+        </button>
+        <button onClick={() => setDisplayMode("moving")}>Moving</button>
+        <button onClick={() => setDisplayMode("freeze")}>Freeze</button>
+
+        <span style={{ opacity: 0.8, alignSelf: "center" }}>
+          Mode: <strong>{displayMode}</strong>
+        </span>
+      </div>
+
+      <canvas
+        ref={canvasRef}
+        width={320}
+        height={240}
+        style={{
+          width: "100%",
+          maxWidth: 400,
+          border: "1px solid #444",
+          background: "black",
+        }}
+      />
+    </div>
   );
 }

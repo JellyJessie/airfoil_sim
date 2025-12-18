@@ -411,19 +411,53 @@ export function computeOutputs(state) {
   });
 
   // Geometry arrays (NASA-compatible 2 x N)
+  // ---------------------------------------------------------
+  // GEOMETRY ARRAYS (FoilSim-compatible)
+  // ---------------------------------------------------------
   const nptc = 37;
+  const npt2 = 19;
   const MAX_J = 40;
+
   const xm = [Array(MAX_J).fill(0), Array(MAX_J).fill(0)];
   const ym = [Array(MAX_J).fill(0), Array(MAX_J).fill(0)];
 
-  if (flowField?.bodyPoints?.length) {
-    const nn = Math.min(nptc, flowField.bodyPoints.length);
-    for (let i = 0; i < nn; i++) {
-      const p = flowField.bodyPoints[i];
-      xm[0][i] = p.x;
-      ym[0][i] = p.y;
-      xm[1][i] = p.x;
-      ym[1][i] = p.y;
+  if (flowField?.bodyPoints?.length >= nptc) {
+    // bodyPoints assumed CCW around airfoil
+    // Split into upper/lower by Y sign (robust & simple)
+    const pts = flowField.bodyPoints;
+
+    const upper = pts.filter((p) => p.y >= 0);
+    const lower = pts.filter((p) => p.y < 0);
+
+    // Sort surfaces in FoilSim order
+    upper.sort((a, b) => a.x - b.x); // LE → TE
+    lower.sort((a, b) => b.x - a.x); // TE → LE
+
+    // Leading edge
+    const le = pts.reduce((m, p) => (p.x < m.x ? p : m), pts[0]);
+
+    // Fill LOWER: i = 1..18
+    for (let k = 0; k < 18 && k < lower.length; k++) {
+      const i = 1 + k;
+      xm[0][i] = lower[k].x;
+      ym[0][i] = lower[k].y;
+    }
+
+    // LE point
+    xm[0][npt2] = le.x;
+    ym[0][npt2] = le.y;
+
+    // Fill UPPER: i = 20..36
+    for (let k = 0; k < 18 && k < upper.length; k++) {
+      const i = npt2 + 1 + k;
+      xm[0][i] = upper[k].x;
+      ym[0][i] = upper[k].y;
+    }
+
+    // Mirror row 1 for legacy compatibility
+    for (let i = 1; i <= 36; i++) {
+      xm[1][i] = xm[0][i];
+      ym[1][i] = ym[0][i];
     }
   }
 

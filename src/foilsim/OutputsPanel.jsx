@@ -14,6 +14,7 @@ import {
   formatDataReport,
   buildFoilSimCsvRows,
 } from "../physics/plotHelpers.js";
+import OutputTabs from "./OutputTabs.jsx";
 
 // ---- helpers ----
 function pickSeries(obj, candidates, fallback = []) {
@@ -221,7 +222,7 @@ export default function OutputsPanel() {
               gap: 10,
             }}
           >
-            <h3 style={{ margin: "6px 0 0" }}>Simulation Plot</h3>
+            <OutputTabs />
             <div style={{ display: "grid", gap: 12 }}>
               <Plot
                 data={gData}
@@ -277,6 +278,7 @@ export default function OutputsPanel() {
 
       return (
         <div style={{ display: "grid", gap: 12 }}>
+          <OutputTabs />
           <GeometryProbeOverlay
             xm={merged.xm}
             ym={merged.ym}
@@ -309,6 +311,7 @@ export default function OutputsPanel() {
 
       return (
         <div style={{ display: "grid", gap: 12 }}>
+          <OutputTabs />
           <pre
             style={{
               whiteSpace: "pre-wrap",
@@ -338,7 +341,12 @@ export default function OutputsPanel() {
     }
 
     case 4: // Plot
-      return <PlotTab out={out} />;
+      return (
+        <div>
+          <OutputTabs />
+          <PlotTab out={out} />;
+        </div>
+      );
 
     default:
       return null;

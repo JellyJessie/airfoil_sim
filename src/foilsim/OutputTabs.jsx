@@ -28,6 +28,7 @@ export function OutputTabs() {
 
   return (
     <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+      <h3 style={{ margin: "6px 0 0" }}>Simulation Plot</h3>
       {OUTPUT_MODES.map((m) => (
         <button
           key={m.id}
