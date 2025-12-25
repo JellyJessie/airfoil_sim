@@ -35,14 +35,6 @@ import {
 } from "../physics/flowField.js";
 import { normalizeInputs } from "../components/foilSimCore.js";
 
-// Ensure this is defined at the top or bottom of the file
-function rotateXY(p, angleDeg) {
-  const rad = (angleDeg * Math.PI) / 180;
-  return {
-    x: p.x * Math.cos(rad) - p.y * Math.sin(rad),
-    y: p.x * Math.sin(rad) + p.y * Math.cos(rad),
-  };
-}
 /**
  * One drag model used everywhere:
  *   cd = cd0 + cdi (when toggles enabled)

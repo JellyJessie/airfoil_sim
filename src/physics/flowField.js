@@ -341,13 +341,6 @@ export function generateFlowField({
   return { bodyPoints, streamlines };
 }
 
-function rotateXY({ x, y }, deg) {
-  const a = (deg * Math.PI) / 180;
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  return { x: x * c - y * s, y: x * s + y * c };
-}
-
 // -----------------------------------------------------------------------------
 // Geometry
 // NACA-like (simple camber line) geometry that matches your 2D panel expectation
@@ -479,4 +472,106 @@ export function generateAirfoilCoordinates(state, numPoints = 101) {
   // return both and also a closed loop (easy for canvas)
   const loop = [...upper, ...lower.reverse()];
   return { upper, lower, loop };
+}
+
+// ---- normalize FoilSim-ish inputs ----
+function normPct(x) {
+  // supports: 0.02 (meaning 2%) OR 2 (meaning 2%)
+  if (!Number.isFinite(x)) return 0;
+  return x > 1 ? x / 100 : x;
+}
+
+// Generate upper/lower (each length n=19) as two polylines: LE -> TE
+export function generateAirfoilUpperLower({
+  chord = 1,
+  camberPct = 0,
+  thicknessPct = 0.12,
+  n = 19, // IMPORTANT: 19 for classic FoilSim packing
+}) {
+  const m = normPct(camberPct); // max camber as fraction of chord
+  const t = normPct(thicknessPct); // thickness as fraction of chord
+
+  // cosine spacing x in [0..1]
+  const x = [];
+  for (let i = 0; i < n; i++) {
+    const beta = (i / (n - 1)) * Math.PI;
+    x.push((1 - Math.cos(beta)) / 2);
+  }
+
+  // thickness distribution (NACA-style)
+  const yt = x.map((xi) => {
+    const a0 = 0.2969;
+    const a1 = -0.126;
+    const a2 = -0.3516;
+    const a3 = 0.2843;
+    const a4 = -0.1015;
+    return (
+      5 *
+      t *
+      (a0 * Math.sqrt(Math.max(xi, 0)) +
+        a1 * xi +
+        a2 * xi * xi +
+        a3 * xi * xi * xi +
+        a4 * xi * xi * xi * xi)
+    );
+  });
+
+  // simple parabolic camber line (FoilSim-like “m” only)
+  const yc = x.map((xi) => m * (2 * xi - xi * xi));
+  const dyc = x.map((xi) => m * (2 - 2 * xi));
+  const theta = dyc.map((d) => Math.atan(d));
+
+  // LE -> TE upper/lower
+  const upper = x.map((xi, i) => ({
+    x: chord * (xi - yt[i] * Math.sin(theta[i])),
+    y: chord * (yc[i] + yt[i] * Math.cos(theta[i])),
+  }));
+
+  const lower = x.map((xi, i) => ({
+    x: chord * (xi + yt[i] * Math.sin(theta[i])),
+    y: chord * (yc[i] - yt[i] * Math.cos(theta[i])),
+  }));
+
+  return { upper, lower }; // both LE->TE
+}
+
+// Rotate points around origin in XY
+export function rotateXY(p, deg) {
+  const a = (deg * Math.PI) / 180;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return { x: p.x * c - p.y * s, y: p.x * s + p.y * c };
+}
+
+// Pack upper+lower into classic FoilSim arrays (1..37 with npt2=19)
+export function packUpperLowerToXmYm({ upper, lower, alphaDeg = 0 }) {
+  const npt2 = upper.length; // 19
+  const nptc = 2 * npt2 - 1; // 37
+  const xm0 = Array(nptc + 1).fill(0); // indices 0..37 (we use 1..37)
+  const ym0 = Array(nptc + 1).fill(0);
+
+  // optional AoA rotation of geometry (like legacy “view fixed freestream”)
+  const U = alphaDeg ? upper.map((p) => rotateXY(p, alphaDeg)) : upper;
+  const L = alphaDeg ? lower.map((p) => rotateXY(p, alphaDeg)) : lower;
+
+  // 1..(npt2-1): LOWER surface TE->LE (excluding LE)
+  // lower is LE->TE, so TE is last index
+  for (let i = 1; i <= npt2 - 1; i++) {
+    const p = L[npt2 - i]; // i=1 => TE, i=18 => near LE
+    xm0[i] = p.x;
+    ym0[i] = p.y;
+  }
+
+  // npt2: LE
+  xm0[npt2] = U[0].x;
+  ym0[npt2] = U[0].y;
+
+  // (npt2+1)..nptc: UPPER surface LE->TE (excluding LE)
+  for (let i = 1; i <= npt2 - 1; i++) {
+    const p = U[i]; // start from U[1]
+    xm0[npt2 + i] = p.x;
+    ym0[npt2 + i] = p.y;
+  }
+
+  return { xm: [xm0], ym: [ym0], nptc, npt2 };
 }
