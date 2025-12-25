@@ -58,11 +58,33 @@ export default function FlowCanvas() {
   if (xm.length && ym.length && xm.length === ym.length) {
     bodyPoints = xm.map((x, i) => ({ x, y: ym[i] }));
   } else {
-    // fallback
     const bodyPoints0 = flowField?.bodyPoints ?? [];
     bodyPoints = alphaDeg ? rotatePolyline(bodyPoints0, alphaDeg) : bodyPoints0;
   }
+  /*
+  const prebodyPoints = (outputs?.airfoilLoop || []).filter(
+    (p) => Number.isFinite(p.x) && Number.isFinite(p.y)
+  );
+  const bodyPoints = alphaDeg
+    ? rotatePolyline(prebodyPoints, alphaDeg)
+    : prebodyPoints;
+  */
+  // Compute bounds for scaling
+  let minX = -2.0, // Hardcode or center on the airfoil
+    maxX = 2.0,
+    minY = -1.5,
+    maxY = 1.5;
 
+  // If you want it to be dynamic but tight:
+  if (bodyPoints.length > 0) {
+    const bMinX = Math.min(...bodyPoints.map((p) => p.x));
+    const bMaxX = Math.max(...bodyPoints.map((p) => p.x));
+    // Add a small margin around the airfoil instead of using all streamlines
+    minX = bMinX - 1.0;
+    maxX = bMaxX + 1.0;
+    minY = -1.0;
+    maxY = 1.0;
+  }
   // ----------------------------
   // Draw effect
   // ----------------------------

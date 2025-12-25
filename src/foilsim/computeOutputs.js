@@ -28,117 +28,21 @@ import {
   buildLiftDragBarData,
   calculateLiftToDrag,
 } from "../physics/plotHelpers";
-import { generateFlowField } from "../physics/flowField.js";
-import { Environment, UnitSystem } from "../components/shape.js";
+import {
+  generateAirfoilCoordinates,
+  generateAirfoilGeometry,
+  generateFlowField,
+} from "../physics/flowField.js";
+import { normalizeInputs } from "../components/foilSimCore.js";
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
-
-function mapUnits(units) {
-  if (units === UnitSystem.IMPERIAL || units === "imperial" || units === 1) {
-    return UnitSystem.IMPERIAL;
-  }
-  return UnitSystem.METRIC;
-}
-
-function mapEnvironment(environmentSelect) {
-  switch (environmentSelect) {
-    case 2:
-      return Environment.MARS;
-    case 3:
-      return Environment.MERCURY;
-    case 4:
-      return Environment.VENUS;
-    case 1:
-    default:
-      return Environment.EARTH;
-  }
-}
-
-function mapShape(shapeSelect) {
-  switch (shapeSelect) {
-    case 1:
-      return "airfoil";
-    case 2:
-      return "ellipse";
-    case 3:
-      return "plate";
-    case 4:
-      return "cylinder";
-    case 5:
-      return "ball";
-    default:
-      return "airfoil";
-  }
-}
-
-/**
- * Normalize incoming UI state.
- * Supports both legacy-ish names and the new React store names.
- */
-function normalizeInputs(state) {
-  const unitsRaw = state.units;
-  const unitSystem = mapUnits(unitsRaw);
-
-  const environmentSelect = state.environmentSelect ?? state.environment ?? 1;
-  const environment = mapEnvironment(environmentSelect);
-
-  const shapeSelect = state.shapeSelect ?? 1;
-  const shapeType = mapShape(shapeSelect);
-
-  // Angle: state.alphaDeg (new) or state.angleDeg (old)
-  const angleDeg = Number(state.angleDeg ?? state.alphaDeg ?? 0);
-
-  // Camber/thickness: state.m/state.t are usually fractions (0.02, 0.12).
-  // If camberPct/thicknessPct exist, assume they are already percent.
-  const camberPct = Number(
-    state.camberPct ?? (Number.isFinite(state.m) ? state.m * 100 : 0)
-  );
-  const thicknessPct = Number(
-    state.thicknessPct ?? (Number.isFinite(state.t) ? state.t * 100 : 0)
-  );
-
-  // Speed: state.V (new) or state.velocity (old)
-  const velocity = Number(state.velocity ?? state.V ?? 0);
-
-  const altitude = Number(state.altitude ?? 0);
-  const chord = Number(state.chord ?? 1);
-  const span = Number(state.span ?? 1);
-
-  // Area: state.S (new) or state.wingArea (old)
-  const wingArea = Number(state.wingArea ?? state.S ?? 0);
-
-  const radius = Number(state.radius ?? 0);
-  const spin = Number(state.spin ?? 0);
-
-  // Options (defaults match your store snippet)
-  const induced = state.induced ?? true;
-  const reCorrection = state.reCorrection ?? true;
-  const efficiency = Number(state.efficiency ?? 0.85);
-
+// Ensure this is defined at the top or bottom of the file
+function rotateXY(p, angleDeg) {
+  const rad = (angleDeg * Math.PI) / 180;
   return {
-    unitSystem,
-    environmentSelect,
-    environment,
-    shapeSelect,
-    shapeType,
-    angleDeg,
-    camberPct,
-    thicknessPct,
-    velocity,
-    altitude,
-    chord,
-    span,
-    wingArea,
-    radius,
-    spin,
-    induced,
-    reCorrection,
-    efficiency,
+    x: p.x * Math.cos(rad) - p.y * Math.sin(rad),
+    y: p.x * Math.sin(rad) + p.y * Math.cos(rad),
   };
 }
-
 /**
  * One drag model used everywhere:
  *   cd = cd0 + cdi (when toggles enabled)
@@ -402,17 +306,48 @@ export function computeOutputs(state) {
   // Non-dimensional circulation term used by flowField.js in uth = ... - gamval/rad.
   const gamval = velocity !== 0 ? Gamma / (2.0 * Math.PI * velocity) : 0;
 
+  const geo = generateAirfoilGeometry({
+    chord,
+    camberPct,
+    thicknessPct,
+    n: 80,
+    angleDeg: -angleDeg, // airfoil rotates with AoA
+  });
+
+  const { loop } = generateAirfoilCoordinates(state, 101);
+
+  // NASA/Foilsim legacy arrays for GeometryPanel + overlays (2 rows)
+  /*const MAX_J = 40;
+  const xm = [Array(MAX_J).fill(0), Array(MAX_J).fill(0)];
+  const ym = [Array(MAX_J).fill(0), Array(MAX_J).fill(0)];
+
+  // Map 37 samples from upper/lower to legacy indices 1..37.
+  // Upper: LE->TE (0..n-1), Lower: LE->TE too, but GeometryPanel often expects
+  // lower in separate row. We'll sample from the generated upper/lower arrays.
+  const nptc = 37;
+  const sampleIdx = (arr, i) => Math.round((i * (arr.length - 1)) / (nptc - 1));
+
+  for (let i = 1; i <= nptc; i++) {
+    const iu = sampleIdx(geo.upper, i - 1);
+    const il = sampleIdx(geo.lower, i - 1);
+    xm[0][i] = geo.upper[iu].x;
+    ym[0][i] = geo.upper[iu].y;
+    xm[1][i] = geo.lower[il].x;
+    ym[1][i] = geo.lower[il].y;
+  }
+*/
+
   const flowField = generateFlowField({
-    alphaDeg: angleDeg,
+    alphaDeg: -angleDeg,
     xcval,
     ycval,
     rval,
     gamval,
+    nStream: 15,
+    nPoints: 37,
   });
 
   // Geometry arrays (NASA-compatible 2 x N)
-  // ---------------------------------------------------------
-  // GEOMETRY ARRAYS (FoilSim-compatible)
   // ---------------------------------------------------------
   const nptc = 37;
   const npt2 = 19;
@@ -500,6 +435,8 @@ export function computeOutputs(state) {
     wingArea,
     aspectRatio,
 
+    airfoilLoop: loop, // for FlowCanvas
+
     // aero gauges  panel
     cl,
     cd,
@@ -529,6 +466,13 @@ export function computeOutputs(state) {
     rotation: {
       radius,
       spin,
+    },
+
+    flowField: {
+      ...flowField,
+      xcval, // Make sure these are passed through!
+      ycval,
+      rval,
     },
 
     // analysis extras

@@ -55,7 +55,6 @@ export function dynamicPressure(velocity, altitudeFt, vconv = 0.6818) {
 // ------------------------
 // Lift Coefficient (Thin Airfoil + Stall Model)
 // ------------------------
-
 export function liftCoefficient(alphaDeg, camberPct = 0) {
   const alpha = (alphaDeg * PI) / 180;
 
@@ -287,13 +286,10 @@ export function getConvdr() {
 // ============================================================================
 // JOUKOWSKI AIRFOIL GEOMETRY
 // ============================================================================
-
-// REPLACES: getycVal()
 export function getycVal(camberPct) {
   return camberPct / 25.0 / 2.0;
 }
 
-// REPLACES: getrVal()
 export function getrVal(thicknessPct, camberPct) {
   const thickness = thicknessPct / 25.0;
   const ycval = getycVal(camberPct);
@@ -304,7 +300,6 @@ export function getrVal(thicknessPct, camberPct) {
   );
 }
 
-// REPLACES: getxcVal()
 export function getxcVal(thicknessPct, camberPct) {
   const ycval = getycVal(camberPct);
   const rval = getrVal(thicknessPct, camberPct);
@@ -312,7 +307,6 @@ export function getxcVal(thicknessPct, camberPct) {
   return 1.0 - Math.sqrt(rval * rval - ycval * ycval);
 }
 
-// REPLACES: getBeta()
 export function getBeta(thicknessPct, camberPct) {
   const rval = getrVal(thicknessPct, camberPct);
   const ycval = getycVal(camberPct);
@@ -349,30 +343,11 @@ export function calculateQ0S(velocity, vconv, altitude, densityStrat) {
   return (0.5 * densityStrat * velocity * velocity) / (vconv * vconv);
 }
 
-// REPLACES: getxcVal()
-export function getxcValFromGeom(thicknessPct, camberPct) {
-  const ycval = getycVal(camberPct);
-  const rval = getrVal(thicknessPct, camberPct);
-
-  return 1.0 - Math.sqrt(rval * rval - ycval * ycval);
-}
-
-// REPLACES: getBeta()
-export function getBetaFromGeom(thicknessPct, camberPct) {
-  const rval = getrVal(thicknessPct, camberPct);
-  const ycval = getycVal(camberPct);
-  const convdr = getConvdr();
-
-  return Math.asin(ycval / rval) / convdr;
-}
-
 // ============================================================================
 // GAMMA (CIRCULATION)
 // ============================================================================
-
-// REPLACES: getGamVal()
 export function getGamVal(angleDeg, thicknessPct, camberPct) {
-  const beta = getBetaFromGeom(thicknessPct, camberPct);
+  const beta = getBeta(thicknessPct, camberPct);
   const convdr = getConvdr();
   const rval = getrVal(thicknessPct, camberPct);
 
@@ -382,12 +357,17 @@ export function getGamVal(angleDeg, thicknessPct, camberPct) {
 // ============================================================================
 // LIFT COEFFICIENT (JOUKOWSKI + STALL + AR CORRECTION)
 // ============================================================================
-export function calculateLiftCoefficient(angleDeg, camberPct, thicknessPct) {
+export function calculateLiftCoefficient(
+  angleDeg,
+  camberPct,
+  thicknessPct,
+  aspectRatio = 4.0 // FoilSim legacy default if you don’t pass AR
+) {
   const convdr = getConvdr();
   const ycval = getycVal(camberPct);
   const rval = getrVal(thicknessPct, camberPct);
-  const xcval = getxcValFromGeom(thicknessPct, camberPct);
-  const beta = getBetaFromGeom(thicknessPct, camberPct);
+  const xcval = getxcVal(thicknessPct, camberPct);
+  const beta = getBeta(thicknessPct, camberPct);
   const gamval = getGamVal(angleDeg, thicknessPct, camberPct);
 
   const leg = xcval - Math.sqrt(rval * rval - ycval * ycval);
@@ -398,9 +378,8 @@ export function calculateLiftCoefficient(angleDeg, camberPct, thicknessPct) {
 
   let cl = (gamval * 4.0 * PI) / chrd;
 
-  // Stall model (exact legacy logic)
+  // Stall model (legacy)
   let stfact = 1.0;
-
   if (angleDeg > 10.0)
     stfact = 0.5 + 0.1 * angleDeg - 0.005 * angleDeg * angleDeg;
   else if (angleDeg < -10.0)
@@ -408,8 +387,10 @@ export function calculateLiftCoefficient(angleDeg, camberPct, thicknessPct) {
 
   cl *= stfact;
 
-  // Aspect ratio correction (AR = 4.0)
-  cl = cl / (1.0 + Math.abs(cl) / (PI * 4.0));
+  // Aspect ratio correction (legacy form)
+  const AR =
+    Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 4.0;
+  cl = cl / (1.0 + Math.abs(cl) / (PI * AR));
 
   return cl;
 }

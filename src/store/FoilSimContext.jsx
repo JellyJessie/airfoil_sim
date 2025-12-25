@@ -55,6 +55,7 @@ const initialState = {
 };
 
 function foilSimReducer(state, action) {
+  console.log("REDUCER ACTION:", action);
   switch (action.type) {
     case "SET_INPUT": {
       const { key, value } = action;

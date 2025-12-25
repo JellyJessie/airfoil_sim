@@ -1,6 +1,6 @@
 import {
   getConvdr,
-  getxcValFromGeom,
+  getxcVal,
   getycVal,
   getrVal,
   getGamVal,
@@ -236,12 +236,14 @@ function generateStreamlines({
   return field;
 }
 
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
 export function generateFlowField({
-  alphaDeg, // angle of attack in degrees
-  xcval, // circle center x (cylinder plane)
-  ycval, // circle center y (cylinder plane)
-  rval, // circle radius
-  gamval, // circulation
+  alphaDeg, // physical AoA in degrees (use 0 if you want fixed-flow visualization)
+  xcval,
+  ycval,
+  rval,
+  gamval,
   nStream = 15,
   nPoints = 37,
 }) {
@@ -250,12 +252,10 @@ export function generateFlowField({
   const nln2 = nlnc / 2 + 1;
   const nptc = nPoints;
 
-  // ---------------------------------------------------------------------------
-  // 1) Airfoil body points (mapped from circle → Joukowski → AoA frame)
-  // ---------------------------------------------------------------------------
+  // ---- body points: circle -> translate -> Joukowski -> rotate to view frame ----
   const bodyPoints = [];
-  for (let index = 1; index <= nptc; index++) {
-    const thet = ((index - 1) * 360) / (nptc - 1);
+  for (let idx = 1; idx <= nptc; idx++) {
+    const thet = ((idx - 1) * 360) / (nptc - 1);
     const xg = rval * Math.cos(convdr * thet) + xcval;
     const yg = rval * Math.sin(convdr * thet) + ycval;
     const rg = Math.sqrt(xg * xg + yg * yg);
@@ -265,54 +265,54 @@ export function generateFlowField({
     let xm = (rg + 1.0 / rg) * Math.cos(convdr * thg);
     let ym = (rg - 1.0 / rg) * Math.sin(convdr * thg);
 
-    // rotate so freestream is horizontal (subtract AoA)
+    // legacy view transform: take out rotation for AoA mapped/cylinder
     const rdm = Math.sqrt(xm * xm + ym * ym);
     const thtm = Math.atan2(ym, xm) / convdr;
-    xm = rdm * Math.cos((thtm + alphaDeg) * convdr);
-    ym = rdm * Math.sin((thtm + alphaDeg) * convdr);
+
+    // NOTE: legacy uses (thtm - alphaDeg). Here we keep the same sign.
+    xm = rdm * Math.cos((thtm - alphaDeg) * convdr);
+    ym = rdm * Math.sin((thtm - alphaDeg) * convdr);
 
     bodyPoints.push({ x: xm, y: ym });
   }
 
-  // ---------------------------------------------------------------------------
-  // 2) Streamlines (modernized genFlow, data-only)
-  // ---------------------------------------------------------------------------
+  // ---- streamlines ----
   const streamlines = [];
 
   for (let k = 1; k <= nlnc; k++) {
-    const psv = -0.5 * (nln2 - 1) + 0.5 * (k - 1); // same as legacy getPSV
-    let fxg = -10.0; // same as legacy getFxg()
+    const psv = -0.5 * (nln2 - 1) + 0.5 * (k - 1); // legacy getPSV
+    let fxg = -10.0; // legacy getFxg
     const line = [];
 
-    for (let index = 1; index <= nptc; index++) {
-      // cylinder-plane y from streamline equation (legacy getLyg)
+    for (let idx = 1; idx <= nptc; idx++) {
       const lyg = solveLyg({ fxg, psv, alphaDeg, rval, gamval });
 
       // cylinder-plane polar
-      let lrg = Math.sqrt(fxg * fxg + lyg * lyg);
-      let lthg = Math.atan2(lyg, fxg) / convdr;
+      const lrg = Math.sqrt(fxg * fxg + lyg * lyg);
+      const lthg = Math.atan2(lyg, fxg) / convdr;
 
       // rotate by AoA and shift to circle center (cylinder plane)
       let lxgt = lrg * Math.cos(convdr * (lthg + alphaDeg));
       let lygt = lrg * Math.sin(convdr * (lthg + alphaDeg));
 
-      // translate cylinder → physical plane
+      // translate cylinder -> physical plane
       lxgt += xcval;
       lygt += ycval;
-      let lrgt = Math.sqrt(lxgt * lxgt + lygt * lygt);
-      let lthgt = Math.atan2(lygt, lxgt) / convdr;
 
-      // Kutta–Joukowski mapping
+      const lrgt = Math.sqrt(lxgt * lxgt + lygt * lygt);
+      const lthgt = Math.atan2(lygt, lxgt) / convdr;
+
+      // Joukowski mapping
       let lxm = (lrgt + 1.0 / lrgt) * Math.cos(convdr * lthgt);
       let lym = (lrgt - 1.0 / lrgt) * Math.sin(convdr * lthgt);
 
-      // rotate to AoA frame (free stream horizontal)
+      // view frame transform (take out AoA)
       const radm = Math.sqrt(lxm * lxm + lym * lym);
       const thetm = Math.atan2(lym, lxm) / convdr;
-      let lxmt = radm * Math.cos(convdr * (thetm + alphaDeg));
-      let lymt = radm * Math.sin(convdr * (thetm + alphaDeg));
+      const lxmt = radm * Math.cos(convdr * (thetm - alphaDeg));
+      let lymt = radm * Math.sin(convdr * (thetm - alphaDeg));
 
-      // stall model: freeze y downstream of separation, same as legacy
+      // stall model (legacy-ish)
       if (alphaDeg > 10.0 && psv > 0.0 && lxmt > 0.0 && line.length > 0) {
         lymt = line[line.length - 1].y;
       }
@@ -323,26 +323,160 @@ export function generateFlowField({
       line.push({ x: lxmt, y: lymt });
 
       // march along streamline in x (legacy fxg += vxdir * deltb)
-      const rad = lrg;
-      const theta = lthg;
-      const thrad = convdr * theta;
+      const thrad = convdr * lthg;
       const alfrad = convdr * alphaDeg;
 
-      const ur = Math.cos(thrad - alfrad) * (1.0 - (rval * rval) / (rad * rad));
+      const ur = Math.cos(thrad - alfrad) * (1.0 - (rval * rval) / (lrg * lrg));
       const uth =
-        -Math.sin(thrad - alfrad) * (1.0 + (rval * rval) / (rad * rad)) -
-        gamval / rad;
+        -Math.sin(thrad - alfrad) * (1.0 + (rval * rval) / (lrg * lrg)) -
+        gamval / lrg;
 
       const vxdir = ur * Math.cos(thrad) - uth * Math.sin(thrad);
-      const deltb = 0.5;
-      fxg += vxdir * deltb;
+      fxg += vxdir * 0.5;
     }
 
     streamlines.push(line);
   }
 
+  return { bodyPoints, streamlines };
+}
+
+function rotateXY({ x, y }, deg) {
+  const a = (deg * Math.PI) / 180;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return { x: x * c - y * s, y: x * s + y * c };
+}
+
+// -----------------------------------------------------------------------------
+// Geometry
+// NACA-like (simple camber line) geometry that matches your 2D panel expectation
+// Returns BOTH a closed loop polyline and upper/lower arrays.
+// -----------------------------------------------------------------------------
+export function generateAirfoilGeometry({
+  chord,
+  camberPct,
+  thicknessPct,
+  n = 80,
+  angleDeg = 0, // rotates geometry in XY plane (about origin)
+}) {
+  const m = (camberPct ?? 0) / 100;
+  const t = (thicknessPct ?? 0) / 100;
+
+  const x = [];
+  for (let i = 0; i < n; i++) {
+    const beta = (i / (n - 1)) * Math.PI;
+    x.push((1 - Math.cos(beta)) / 2); // cosine spacing 0..1
+  }
+
+  // thickness distribution (classic NACA 00xx)
+  const yt = x.map(
+    (xi) =>
+      5 *
+      t *
+      (0.2969 * Math.sqrt(Math.max(0, xi)) -
+        0.126 * xi -
+        0.3516 * xi ** 2 +
+        0.2843 * xi ** 3 -
+        0.1015 * xi ** 4)
+  );
+
+  // simple camber line (keeps your camberPct behavior stable)
+  const yc = x.map((xi) => m * (2 * xi - xi ** 2));
+  const dyc = x.map((xi) => m * (2 - 2 * xi));
+  const theta = dyc.map((d) => Math.atan(d));
+
+  const upper = x.map((xi, i) => ({
+    x: chord * (xi - yt[i] * Math.sin(theta[i])),
+    y: chord * (yc[i] + yt[i] * Math.cos(theta[i])),
+  }));
+
+  const lower = x.map((xi, i) => ({
+    x: chord * (xi + yt[i] * Math.sin(theta[i])),
+    y: chord * (yc[i] - yt[i] * Math.cos(theta[i])),
+  }));
+
+  // closed loop: upper LE->TE then lower TE->LE
+  let loop = [...upper, ...lower.slice().reverse()];
+
+  if (angleDeg) loop = loop.map((p) => rotateXY(p, angleDeg));
+
   return {
-    bodyPoints,
-    streamlines,
+    upper: angleDeg ? upper.map((p) => rotateXY(p, angleDeg)) : upper,
+    lower: angleDeg ? lower.map((p) => rotateXY(p, angleDeg)) : lower,
+    loop,
   };
+}
+
+// the real shapeCore.js math
+// NACA-like generic airfoil geometry (placeholder).
+// Replace with the actual NASA geometry logic from shapeCore.js.
+// NACA-style airfoil geometry (upper+lower)
+// - camberPct: % chord (e.g. 2)
+// - thicknessPct: % chord (e.g. 12.5)
+// - chord: length in your plot units (usually 1.0)
+// - camberPos: fraction of chord (p), default 0.4 (NACA 2412-style)
+export function generateAirfoilCoordinates(state, numPoints = 101) {
+  const chord = Number(state.chord ?? 1);
+  const camberPct = Number(state.camberPct ?? 0);
+  const thicknessPct = Number(state.thicknessPct ?? 12);
+  const p = Number(state.camberPos ?? state.p ?? 0.4); // if you have p in state, use it
+
+  const m = camberPct / 100; // max camber as fraction of chord
+  const t = thicknessPct / 100; // thickness as fraction of chord
+  const c = chord;
+
+  // cosine spacing gives nicer LE resolution
+  const x = [];
+  for (let i = 0; i < numPoints; i++) {
+    const beta = (i * Math.PI) / (numPoints - 1);
+    x.push((1 - Math.cos(beta)) / 2); // 0..1
+  }
+
+  const upper = [];
+  const lower = [];
+
+  for (let i = 0; i < numPoints; i++) {
+    const xc = x[i]; // 0..1
+    const xi = xc * c; // physical x
+
+    // thickness distribution (NACA)
+    const yt =
+      5 *
+      t *
+      c *
+      (0.2969 * Math.sqrt(Math.max(xc, 1e-9)) -
+        0.126 * xc -
+        0.3516 * xc * xc +
+        0.2843 * xc * xc * xc -
+        0.1015 * xc * xc * xc * xc);
+
+    // camber line yc and slope dyc/dx (piecewise, needs p)
+    let yc = 0;
+    let dyc = 0;
+    if (m > 0 && p > 0 && p < 1) {
+      if (xc < p) {
+        yc = (m / (p * p)) * (2 * p * xc - xc * xc) * c;
+        dyc = ((2 * m) / (p * p)) * (p - xc);
+      } else {
+        yc = (m / ((1 - p) * (1 - p))) * (1 - 2 * p + 2 * p * xc - xc * xc) * c;
+        dyc = ((2 * m) / ((1 - p) * (1 - p))) * (p - xc);
+      }
+    }
+
+    const theta = Math.atan(dyc);
+
+    // rotate thickness normal to camber line
+    const xu = xi - yt * Math.sin(theta);
+    const yu = yc + yt * Math.cos(theta);
+    const xl = xi + yt * Math.sin(theta);
+    const yl = yc - yt * Math.cos(theta);
+
+    upper.push({ x: xu, y: yu });
+    lower.push({ x: xl, y: yl });
+  }
+
+  // return both and also a closed loop (easy for canvas)
+  const loop = [...upper, ...lower.reverse()];
+  return { upper, lower, loop };
 }

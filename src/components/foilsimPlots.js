@@ -244,7 +244,7 @@ export function createAirfoilPlot(baseState) {
   }
 
   /**
-   * Replacement for legacy getClPlot(camb, thic, angl):
+   *  getClPlot(camb, thic, angl):
    *  - camb, thic are the *normalized* values used in the old NASA code (camber/25, thickness/25).
    *  - angl is in degrees.
    */

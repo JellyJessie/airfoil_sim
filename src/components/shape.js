@@ -101,6 +101,29 @@ export class Shape {
     return this.wingArea;
   }
 
+  // Inside class Shape in shape.js
+  getXcVal() {
+    const thickness = this.thicknessPercent / 25.0;
+    const ycval = this.getYcVal();
+    const rval = this.getRVal();
+    return 1.0 - Math.sqrt(Math.max(0, rval * rval - ycval * ycval));
+  }
+
+  getYcVal() {
+    // Map camber percentage to ycval
+    return this.camberPercent / 20.0;
+  }
+
+  getRVal() {
+    const thickness = this.thicknessPercent / 25.0;
+    const ycval = this.getYcVal();
+    return (
+      thickness / 4.0 +
+      Math.sqrt(
+        Math.max(0, (thickness * thickness) / 16.0 + ycval * ycval + 1.0)
+      )
+    );
+  }
   // --- helpers ---
 
   getConvDr() {

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from "react";
 import { useFoilSim } from "../store/FoilSimContext.jsx";
-import { computeOutputs } from "../foilsim/computeOutputs.js"; // adjust path if different
+import { computeOutputs } from "../foilsim/computeOutputs";
 import Design3D from "../design/Design3D.jsx"; // we’ll patch it to accept props
 import AnalysisPanel from "./AnalysisPanel.jsx";
 import FlowCanvas from "./FlowCanvas.jsx";
@@ -289,6 +289,7 @@ export default function FoilSimPanel() {
       e.target.value = "";
     });
   };
+
   const err = results?.__error;
 
   return (
