@@ -568,6 +568,7 @@ export function generateJoukowskiAirfoilLoop({
 
   return { loop, xcval, ycval, rval };
 }
+
 export function generateFlowField({
   angleDeg,
   camberPct,
@@ -663,86 +664,3 @@ export function generateFlowField({
     streamlines,
   };
 }
-
-/*export function generateFlowField({
-  angleDeg,
-  camberPct,
-  thicknessPct,
-  nStream = 15,
-  nPoints = 37,
-}) {
-  const convdr = getConvdr();
-  const ycval = getycVal(camberPct);
-  const rval = getrVal(thicknessPct, camberPct);
-  const xcval = getxcVal(thicknessPct, camberPct);
-  const gamval = getGamVal(angleDeg, thicknessPct, camberPct);
-
-  // Use the same Joukowski loop for the body
-  const { loop: bodyPoints } = generateJoukowskiAirfoilLoop({
-    angleDeg, // This rotates the wing itself
-    camberPct,
-    thicknessPct,
-    nptc: nPoints,
-  });
-
-  const streamlines = [];
-  const nln2 = nStream / 2 + 1;
-  const alfrad = angleDeg * convdr;
-
-  for (let k = 1; k <= nStream; k++) {
-    const psv = -0.5 * (nln2 - 1) + 0.5 * (k - 1);
-    let fxg = -10.0;
-    const line = [];
-
-    for (let idx = 1; idx <= nPoints; idx++) {
-      // 1. Solve for vertical position in the unrotated cylinder plane
-      const lyg = solveLyg({ fxg, psv, alphaDeg: angleDeg, rval, gamval });
-
-      // 2. Map to polar coordinates
-      const lrg = Math.sqrt(fxg * fxg + lyg * lyg);
-      const lthg = Math.atan2(lyg, fxg);
-
-      // 3. Translate to the shifted Joukowski circle center
-      // IMPORTANT: We shift by xcval/ycval BEFORE the mapping
-      let lxgt = lrg * Math.cos(lthg + alfrad) + xcval;
-      let lygt = lrg * Math.sin(lthg + alfrad) + ycval;
-
-      const lrgt = Math.sqrt(lxgt * lxgt + lygt * lygt);
-      const lthgt = Math.atan2(lygt, lxgt);
-
-      // 4. Joukowski Mapping (Z = ζ + 1/ζ)
-      // This creates the airfoil shape from the circle
-      let lxm = (lrgt + 1.0 / lrgt) * Math.cos(lthgt);
-      let lym = (lrgt - 1.0 / lrgt) * Math.sin(lthgt);
-
-      // 5. Rotate back to the view frame so flow remains horizontal (parallel)
-      // This is the "Counter-Rotation" that aligns the streamlines with the canvas
-      const finalX = lxm * Math.cos(-alfrad) - lym * Math.sin(-alfrad);
-      const finalY = lxm * Math.sin(-alfrad) + lym * Math.cos(-alfrad);
-
-      // Stall modeling
-      let currentY = finalY;
-      if (Math.abs(angleDeg) > 10.0 && finalX > 0.1 && line.length > 0) {
-        // If stalled, keep the Y coordinate flat to simulate separation
-        if ((angleDeg > 0 && psv > 0) || (angleDeg < 0 && psv < 0)) {
-          currentY = line[line.length - 1].y;
-        }
-      }
-
-      line.push({ x: finalX, y: currentY });
-
-      // 6. March the fxg coordinate forward based on velocity
-      const ur = Math.cos(lthg - alfrad) * (1.0 - (rval * rval) / (lrg * lrg));
-      const uth =
-        -Math.sin(lthg - alfrad) * (1.0 + (rval * rval) / (lrg * lrg)) -
-        gamval / lrg;
-      const vxdir = ur * Math.cos(lthg) - uth * Math.sin(lthg);
-
-      fxg += vxdir * 0.5;
-    }
-    streamlines.push(line);
-  }
-
-  return { xcval, ycval, rval, gamval, bodyPoints, streamlines };
-}
-*/

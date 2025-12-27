@@ -46,6 +46,8 @@ export default function FlowCanvas() {
   const canvasRef = useRef(null);
   const { outputs } = useFoilSim();
 
+  const [zoom, setZoom] = useState(1.0); // 1.0 = Default, 2.0 = 2x Zoom
+
   const [frame, setFrame] = useState(0);
   const [displayMode, setDisplayMode] = useState("streamlines"); // streamlines | moving | freeze
 
@@ -94,9 +96,7 @@ export default function FlowCanvas() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
-    const width = canvas.width;
-    const height = canvas.height;
+    const { width, height } = canvas;
 
     // background
     ctx.clearRect(0, 0, width, height);
@@ -164,9 +164,10 @@ export default function FlowCanvas() {
     const mx = (minX + maxX) / 2;
     const my = (minY + maxY) / 2;
 
+    // The scale now incorporates the zoom variable
     const mapPoint = (p) => ({
-      x: cx + (p.x - mx) * scale,
-      y: cy - (p.y - my) * scale,
+      x: cx + (p.x - mx) * scale * zoom,
+      y: cy - (p.y - my) * scale * zoom,
     });
 
     const drawPolyline = (line) => {
@@ -295,10 +296,22 @@ export default function FlowCanvas() {
       ctx.closePath(); // closes at LE cleanly; no extra “chord line” segment
       ctx.stroke();
     }
-  }, [bodyPoints, streamlines, frame, displayMode]);
+  }, [bodyPoints, streamlines, frame, displayMode, zoom]);
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ marginBottom: 10, display: "flex", gap: "10px" }}>
+        <label>Zoom: </label>
+        <input
+          type="range"
+          min="0.5"
+          max="5.0"
+          step="0.1"
+          value={zoom}
+          onChange={(e) => setZoom(parseFloat(e.target.value))}
+        />
+        <span>{zoom.toFixed(1)}x</span>
+      </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button onClick={() => setDisplayMode("streamlines")}>
           Streamlines

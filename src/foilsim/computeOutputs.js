@@ -30,7 +30,7 @@ import {
 } from "../physics/plotHelpers";
 
 // Pack xm/ym from the loop IN LOOP ORDER (prevents the “straight line” artifact)
-function packXmYmFromLoopOrder(loop, nptc = 37) {
+/*function packXmYmFromLoopOrder(loop, nptc = 37) {
   const xm = Array.from({ length: 1 }, () => Array(nptc + 1).fill(undefined));
   const ym = Array.from({ length: 1 }, () => Array(nptc + 1).fill(undefined));
 
@@ -41,6 +41,21 @@ function packXmYmFromLoopOrder(loop, nptc = 37) {
     ym[0][i] = p?.y;
   }
   return { xm, ym };
+}*/
+function packXmYmFromLoopOrder(loop, nptc = 37) {
+  const xm = [new Array(nptc + 1).fill(undefined)];
+  const ym = [new Array(nptc + 1).fill(undefined)];
+  const plp = new Array(nptc + 1).fill(undefined);
+  const plv = new Array(nptc + 1).fill(undefined);
+
+  for (let i = 1; i <= nptc; i++) {
+    const p = loop[i - 1];
+    xm[0][i] = p?.x;
+    ym[0][i] = p?.y;
+    plp[i] = p?.cp; // Required for GeometryPanel P column
+    plv[i] = p?.vRatio; // Required for GeometryPanel V column
+  }
+  return { xm, ym, plp, plv };
 }
 
 export function computeOutputs(state) {
