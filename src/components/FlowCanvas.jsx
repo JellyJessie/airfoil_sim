@@ -2,15 +2,44 @@
 import React, { useRef, useEffect, useMemo, useState } from "react";
 import { useFoilSim } from "../store/FoilSimContext";
 
-function rotatePoint(p, deg) {
-  const a = (deg * Math.PI) / 180;
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  return { x: p.x * c - p.y * s, y: p.x * s + p.y * c };
-}
+// Build a closed airfoil loop from FoilSim-style arrays xm/ym (index 0 unused).
+// nptc=37 => indices 1..36 valid, npt2=19.
+function buildAirfoilLoopFromXmYm(xm, ym, nptc = 37) {
+  const npt2 = Math.floor(nptc / 2) + 1; // 19
+  const pts = [];
 
-function rotatePolyline(points, deg) {
-  return points.map((p) => rotatePoint(p, deg));
+  // Upper surface: LE -> TE (19 → 1)
+  for (let i = npt2; i >= 1; i--) {
+    const x = xm[i];
+    const y = ym[i];
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      pts.push({ x, y });
+    }
+  }
+
+  // Lower surface: TE -> LE (20 → 36)
+  // IMPORTANT: start at npt2 + 1 (20), NOT 19
+  for (let i = npt2 + 1; i <= nptc - 1; i++) {
+    const x = xm[i];
+    const y = ym[i];
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      pts.push({ x, y });
+    }
+  }
+
+  return pts;
+}
+function buildClosedLoopFromXmYm(xm, ym, nptc = 37) {
+  const npt2 = Math.floor(nptc / 2) + 1; // 19
+
+  const upper = [];
+  for (let i = npt2; i >= 1; i--) upper.push({ x: xm[i], y: ym[i] }); // 19..1
+
+  const lower = [];
+  for (let i = npt2 + 1; i <= nptc; i++) lower.push({ x: xm[i], y: ym[i] }); // 20..37
+
+  // upper already ends at TE; lower starts right after TE -> no duplicate
+  return [...upper, ...lower];
 }
 
 export default function FlowCanvas() {
@@ -18,11 +47,10 @@ export default function FlowCanvas() {
   const { outputs } = useFoilSim();
 
   const [frame, setFrame] = useState(0);
-  const [displayMode, setDisplayMode] = useState("streamlines");
-  // "streamlines" | "moving" | "freeze"
+  const [displayMode, setDisplayMode] = useState("streamlines"); // streamlines | moving | freeze
 
   // ----------------------------
-  // Animation driver (like old timer/redraw)
+  // Animation driver
   // ----------------------------
   useEffect(() => {
     if (!outputs) return;
@@ -31,74 +59,46 @@ export default function FlowCanvas() {
     const velocity = outputs.velocity ?? 0;
     if (velocity <= 0) return;
 
-    // legacy-ish: timer = 100 - int((0.227 * velocity) / 0.6818)
     let delay = 100 - Math.floor((0.227 * velocity) / 0.6818);
     if (!Number.isFinite(delay)) return;
     delay = Math.max(10, Math.min(1000, delay));
 
     const id = setTimeout(() => setFrame((f) => f + 1), delay);
     return () => clearTimeout(id);
-  }, [outputs?.velocity, frame, displayMode, outputs]);
+  }, [outputs, outputs?.velocity, frame, displayMode]);
 
   // ----------------------------
-  // Pull flow data
+  // Pull flow + geometry
   // ----------------------------
-  const flowField = outputs?.flowField;
-  const alphaDeg = outputs?.angleDeg ?? outputs?.alphaDeg ?? 0;
+  const streamlines = outputs?.flowField?.streamlines ?? [];
 
-  // Visualization model:
-  // - Streamlines are drawn unrotated (fixed flow direction)
-  // - Airfoil rotates with AoA
-  const streamlines = flowField?.streamlines ?? [];
-  // Prefer NASA-style airfoil surface geometry from computeOutputs (much cleaner)
-  const xm = outputs?.xm?.[0] ?? []; // one row is fine for drawing outline
-  const ym = outputs?.ym?.[0] ?? [];
+  // Prefer FoilSim xm/ym if present
+  const xm0 = outputs?.xm?.[0] ?? [];
+  const ym0 = outputs?.ym?.[0] ?? [];
+  const bodyPoints = useMemo(() => {
+    if (xm0.length >= 37 && ym0.length >= 37) {
+      return buildClosedLoopFromXmYm(xm0, ym0, 37);
+    }
+    // fallback if you also provide packed loop elsewhere
+    const loop = outputs?.airfoilLoop ?? outputs?.flowField?.bodyPoints ?? [];
+    return (loop || []).filter(
+      (p) => p && Number.isFinite(p.x) && Number.isFinite(p.y)
+    );
+  }, [xm0, ym0, outputs]);
 
-  let bodyPoints = [];
-  if (xm.length && ym.length && xm.length === ym.length) {
-    bodyPoints = xm.map((x, i) => ({ x, y: ym[i] }));
-  } else {
-    const bodyPoints0 = flowField?.bodyPoints ?? [];
-    bodyPoints = alphaDeg ? rotatePolyline(bodyPoints0, alphaDeg) : bodyPoints0;
-  }
-  /*
-  const prebodyPoints = (outputs?.airfoilLoop || []).filter(
-    (p) => Number.isFinite(p.x) && Number.isFinite(p.y)
-  );
-  const bodyPoints = alphaDeg
-    ? rotatePolyline(prebodyPoints, alphaDeg)
-    : prebodyPoints;
-  */
-  // Compute bounds for scaling
-  let minX = -2.0, // Hardcode or center on the airfoil
-    maxX = 2.0,
-    minY = -1.5,
-    maxY = 1.5;
-
-  // If you want it to be dynamic but tight:
-  if (bodyPoints.length > 0) {
-    const bMinX = Math.min(...bodyPoints.map((p) => p.x));
-    const bMaxX = Math.max(...bodyPoints.map((p) => p.x));
-    // Add a small margin around the airfoil instead of using all streamlines
-    minX = bMinX - 1.0;
-    maxX = bMaxX + 1.0;
-    minY = -1.0;
-    maxY = 1.0;
-  }
   // ----------------------------
   // Draw effect
   // ----------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear and background
+    // background
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "black";
     ctx.fillRect(0, 0, width, height);
@@ -112,75 +112,98 @@ export default function FlowCanvas() {
       return;
     }
 
-    // Compute bounds for scaling
+    // ---- bounds: focus on airfoil, then include enough streamline margin ----
+    // This avoids “streamlines too wide” making the airfoil tiny.
     let minX = Infinity,
       maxX = -Infinity,
       minY = Infinity,
       maxY = -Infinity;
-    const allPoints = [
-      ...bodyPoints,
-      ...bodyPoints,
-      ...bodyPoints, // triple-weight airfoil in bounds
-      ...streamlines.flat().filter(Boolean),
-    ];
 
-    for (const p of allPoints) {
-      if (!p) continue;
+    const addPoint = (p) => {
+      if (!p) return;
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
       if (p.y < minY) minY = p.y;
       if (p.y > maxY) maxY = p.y;
+    };
+
+    // 1) airfoil bounds first (tight)
+    bodyPoints.forEach(addPoint);
+
+    // 2) expand bounds a bit (so airfoil not clipped)
+    if (Number.isFinite(minX) && Number.isFinite(maxX)) {
+      const padX = 1.2; // tune: bigger => more space around airfoil
+      const padY = 0.9;
+      minX -= padX;
+      maxX += padX;
+      minY -= padY;
+      maxY += padY;
+    }
+
+    // 3) optionally include streamlines, but cap their influence
+    // (sample a few points so they don't dominate the scale)
+    for (const line of streamlines) {
+      if (!line?.length) continue;
+      const step = Math.max(1, Math.floor(line.length / 12)); // ~12 samples
+      for (let i = 0; i < line.length; i += step) addPoint(line[i]);
     }
 
     if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return;
 
-    const padding = 20;
+    const paddingPx = 18;
     const spanX = maxX - minX || 1;
     const spanY = maxY - minY || 1;
 
-    const scaleX = (width - 2 * padding) / spanX;
-    const scaleY = (height - 2 * padding) / spanY;
+    const scaleX = (width - 2 * paddingPx) / spanX;
+    const scaleY = (height - 2 * paddingPx) / spanY;
     const scale = Math.min(scaleX, scaleY);
 
     const cx = width / 2;
     const cy = height / 2;
+    const mx = (minX + maxX) / 2;
+    const my = (minY + maxY) / 2;
 
     const mapPoint = (p) => ({
-      x: cx + (p.x - (minX + maxX) / 2) * scale,
-      y: cy - (p.y - (minY + maxY) / 2) * scale,
+      x: cx + (p.x - mx) * scale,
+      y: cy - (p.y - my) * scale,
     });
 
-    // ---- helpers ----
     const drawPolyline = (line) => {
       if (!line?.length) return;
       ctx.beginPath();
+      let started = false;
       for (let i = 0; i < line.length; i++) {
-        const mp = mapPoint(line[i]);
-        if (i === 0) ctx.moveTo(mp.x, mp.y);
-        else ctx.lineTo(mp.x, mp.y);
+        const p = line[i];
+        if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+        const mp = mapPoint(p);
+        if (!started) {
+          ctx.moveTo(mp.x, mp.y);
+          started = true;
+        } else {
+          ctx.lineTo(mp.x, mp.y);
+        }
       }
-      ctx.stroke();
+      if (started) ctx.stroke();
     };
 
-    // Classic FoilSim-style moving dashes along a streamline polyline (fast)
+    // Moving dashes along streamline
     const drawMovingDashes = (line) => {
       if (!line?.length) return;
 
-      // ---- tune these ----
-      const sampleStep = 3; // fewer points = faster
-      const dashLen = 6; // px
-      const gapLen = 10; // px
-      const speed = 2.0; // px/frame
-      // --------------------
+      const sampleStep = 3;
+      const dashLen = 7;
+      const gapLen = 10;
+      const speed = 2.0;
 
-      // Map streamline to screen once (so dash lengths are in pixels)
       const pts = [];
       for (let i = 0; i < line.length; i += sampleStep) {
-        pts.push(mapPoint(line[i]));
+        const p = line[i];
+        if (p && Number.isFinite(p.x) && Number.isFinite(p.y))
+          pts.push(mapPoint(p));
       }
       if (pts.length < 2) return;
 
-      // Cumulative arc length
       const s = [0];
       let total = 0;
       for (let i = 1; i < pts.length; i++) {
@@ -190,10 +213,12 @@ export default function FlowCanvas() {
       if (total <= 1e-6) return;
 
       const period = dashLen + gapLen;
-      const offset = (-frame * speed) % period;
+
+      // If your direction is “opposite”, flip the sign here:
+      const offset = (+frame * speed) % period;
 
       ctx.strokeStyle = "red";
-      ctx.lineWidth = 2; // was 2
+      ctx.lineWidth = 2;
       ctx.lineCap = "round";
 
       for (let start = -offset; start < total; start += period) {
@@ -213,7 +238,6 @@ export default function FlowCanvas() {
           if (s1 < a0) continue;
           if (s0 > a1) break;
 
-          // enter
           if (!started) {
             const t = (a0 - s0) / (s1 - s0 || 1);
             const x = pts[i - 1].x + t * (pts[i].x - pts[i - 1].x);
@@ -222,7 +246,6 @@ export default function FlowCanvas() {
             started = true;
           }
 
-          // exit
           if (s1 >= a1) {
             const t = (a1 - s0) / (s1 - s0 || 1);
             const x = pts[i - 1].x + t * (pts[i].x - pts[i - 1].x);
@@ -239,34 +262,37 @@ export default function FlowCanvas() {
     };
 
     // ----------------------------
-    // Draw streamlines / dashes
+    // Draw streamlines
     // ----------------------------
     if (displayMode === "streamlines") {
       ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(255, 255, 0, 0.7)";
+      ctx.strokeStyle = "rgba(255, 255, 0, 0.70)";
       for (const line of streamlines) drawPolyline(line);
     } else {
-      // moving or freeze: faint base lines + moving dashes
       ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(255, 255, 0, 0.35)";
+      ctx.strokeStyle = "rgba(255, 255, 0, 0.30)";
       for (const line of streamlines) drawPolyline(line);
 
-      for (const line of streamlines) drawMovingDashes(line);
+      if (displayMode === "moving") {
+        for (const line of streamlines) drawMovingDashes(line);
+      }
+      // freeze: just the faint base lines
     }
 
     // ----------------------------
-    // Draw airfoil/body
+    // Draw airfoil outline (no midline)
     // ----------------------------
     if (bodyPoints.length) {
       ctx.strokeStyle = "cyan";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      for (let i = 0; i < bodyPoints.length; i++) {
+      const p0 = mapPoint(bodyPoints[0]);
+      ctx.moveTo(p0.x, p0.y);
+      for (let i = 1; i < bodyPoints.length; i++) {
         const mp = mapPoint(bodyPoints[i]);
-        if (i === 0) ctx.moveTo(mp.x, mp.y);
-        else ctx.lineTo(mp.x, mp.y);
+        ctx.lineTo(mp.x, mp.y);
       }
-      ctx.closePath();
+      ctx.closePath(); // closes at LE cleanly; no extra “chord line” segment
       ctx.stroke();
     }
   }, [bodyPoints, streamlines, frame, displayMode]);
@@ -287,11 +313,11 @@ export default function FlowCanvas() {
 
       <canvas
         ref={canvasRef}
-        width={320}
-        height={240}
+        width={520}
+        height={360}
         style={{
           width: "100%",
-          maxWidth: 400,
+          maxWidth: 820,
           border: "1px solid #444",
           background: "black",
         }}

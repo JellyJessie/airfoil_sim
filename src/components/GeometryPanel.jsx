@@ -1,3 +1,4 @@
+// src/foilsim/GeometryPanel.jsx
 import React from "react";
 import { useFoilSim } from "../store/FoilSimContext";
 
@@ -9,10 +10,9 @@ function fmtInt(v) {
 }
 
 /**
- * xm/ym in legacy NASA code are often 2D like xm[0][i].
- * This helper supports BOTH:
- *  - 2D: arr[0][i]
- *  - 1D: arr[i]
+ * Supports BOTH:
+ *  - 2D arrays: arr[0][i]
+ *  - 1D arrays: arr[i]
  */
 function getCoord(arr, i) {
   if (!arr) return undefined;
@@ -20,17 +20,24 @@ function getCoord(arr, i) {
   return arr?.[i];
 }
 
-function GeometryPanel({ state }) {
-  const npt2 = 19;
+export default function GeometryPanel() {
+  const { state, outputs } = useFoilSim();
 
-  // Legacy mapfact logic
-  const mapfact = state.shapeSelect < 4 ? 4.0 : 2.0;
+  // If computeOutputs hasn’t produced these yet, show a friendly hint
+  const xm = outputs?.xm ?? [];
+  const ym = outputs?.ym ?? [];
+  const plp = outputs?.plp ?? []; // pressure (or Cp/converted P depending on your computeOutputs)
+  const plv = outputs?.plv ?? []; // velocity (or V/V∞ depending on your computeOutputs)
 
-  const xm = state.xm ?? [];
-  const ym = state.ym ?? []; // IMPORTANT: you need ym in state for geometry
-  const plp = state.plp ?? [];
-  const plv = state.plv ?? [];
+  // Legacy FoilSim indexing constants
+  const nptc = 37;
+  const npt2 = Math.floor(nptc / 2) + 1; // 19
 
+  // Legacy mapfact logic (FoilSim uses different scaling for cylinder/ball)
+  const mapfact = (state?.shapeSelect ?? 1) < 4 ? 4.0 : 2.0;
+
+  // Indices that avoid “connecting” across the trailing edge.
+  // (This also helps avoid the visual “straight line through the airfoil” problem.)
   const upperIdx = Array.from({ length: 19 }, (_, k) => npt2 - k + 1); // 20..2
   const lowerIdx = Array.from({ length: 19 }, (_, k) => npt2 + k - 1); // 18..36
 
@@ -38,8 +45,8 @@ function GeometryPanel({ state }) {
     indices.map((i) => {
       const x = getCoord(xm, i);
       const y = getCoord(ym, i);
-      const p = plp[i];
-      const v = plv[i];
+      const p = plp?.[i];
+      const v = plv?.[i];
 
       return {
         i,
@@ -52,6 +59,30 @@ function GeometryPanel({ state }) {
 
   const upperRows = makeRows(upperIdx);
   const lowerRows = makeRows(lowerIdx);
+
+  const hasPV =
+    upperRows.some((r) => Number.isFinite(r.p) || Number.isFinite(r.v)) ||
+    lowerRows.some((r) => Number.isFinite(r.p) || Number.isFinite(r.v));
+
+  if (!xm?.length || !ym?.length) {
+    return (
+      <div style={{ padding: 12, color: "#888" }}>
+        No geometry data yet. Make sure computeOutputs returns outputs.xm /
+        outputs.ym.
+      </div>
+    );
+  }
+
+  if (!hasPV) {
+    return (
+      <div style={{ padding: 12, color: "#888" }}>
+        Geometry loaded, but P/V are missing.
+        <br />
+        Make sure computeOutputs returns outputs.plp and outputs.plv (arrays
+        indexed 1..37).
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 12 }}>
@@ -105,4 +136,3 @@ function GeometryPanel({ state }) {
     </div>
   );
 }
-export default GeometryPanel;

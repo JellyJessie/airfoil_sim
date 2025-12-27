@@ -248,7 +248,7 @@ export default function OutputsPanel() {
                     <tr>
                       <td>Re : </td>
                       <td>{out.reynolds?.toFixed?.(0)}</td>
-                      <td>CD0 : </td>
+                      <td>CDo : </td>
                       <td>{out.cd0?.toFixed?.(4)}</td>
                     </tr>
                     <tr>
@@ -279,7 +279,7 @@ export default function OutputsPanel() {
       return (
         <div style={{ display: "grid", gap: 12 }}>
           <OutputTabs />
-          <GeometryProbeOverlay
+          {/*<GeometryProbeOverlay
             xm={merged.xm}
             ym={merged.ym}
             plp={merged.plp}
@@ -298,7 +298,7 @@ export default function OutputsPanel() {
             span={merged.span}
             wingArea={merged.S}
             q0={out.q0}
-          />
+          />*/}
 
           <GeometryPanel state={merged} />
         </div>
