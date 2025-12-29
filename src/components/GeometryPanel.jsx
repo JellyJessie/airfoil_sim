@@ -38,9 +38,10 @@ export default function GeometryPanel() {
 
   // Indices that avoid “connecting” across the trailing edge.
   // (This also helps avoid the visual “straight line through the airfoil” problem.)
-  const upperIdx = Array.from({ length: 19 }, (_, k) => npt2 - k + 1); // 20..2
-  const lowerIdx = Array.from({ length: 19 }, (_, k) => npt2 + k - 1); // 18..36
-
+  // const upperIdx = Array.from({ length: 19 }, (_, k) => npt2 - k + 1); // 20..2
+  // const lowerIdx = Array.from({ length: 19 }, (_, k) => npt2 + k - 1); // 18..36
+  const upperIdx = Array.from({ length: 19 }, (_, k) => 19 + k); // 19, 20...37
+  const lowerIdx = Array.from({ length: 19 }, (_, k) => 19 - k); // 19, 18...1
   const makeRows = (indices) =>
     indices.map((i) => {
       const x = getCoord(xm, i);

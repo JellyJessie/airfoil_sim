@@ -30,7 +30,7 @@ import {
 } from "../physics/plotHelpers";
 
 // Pack xm/ym from the loop IN LOOP ORDER (prevents the “straight line” artifact)
-/*function packXmYmFromLoopOrder(loop, nptc = 37) {
+function packXmYmFromLoopOrder(loop, nptc = 37) {
   const xm = Array.from({ length: 1 }, () => Array(nptc + 1).fill(undefined));
   const ym = Array.from({ length: 1 }, () => Array(nptc + 1).fill(undefined));
 
@@ -41,21 +41,65 @@ import {
     ym[0][i] = p?.y;
   }
   return { xm, ym };
-}*/
-function packXmYmFromLoopOrder(loop, nptc = 37) {
-  const xm = [new Array(nptc + 1).fill(undefined)];
-  const ym = [new Array(nptc + 1).fill(undefined)];
-  const plp = new Array(nptc + 1).fill(undefined);
-  const plv = new Array(nptc + 1).fill(undefined);
+}
 
-  for (let i = 1; i <= nptc; i++) {
-    const p = loop[i - 1];
-    xm[0][i] = p?.x;
-    ym[0][i] = p?.y;
-    plp[i] = p?.cp; // Required for GeometryPanel P column
-    plv[i] = p?.vRatio; // Required for GeometryPanel V column
+// -----------------------------------------------------------------------------
+// Surface pressure/velocity distribution (FoilSim legacy-style)
+// Produces arrays indexed 1..nptc (index 0 unused) to match NASA/FoilSim tables.
+// plv: surface speed (same units as input velocity)
+// plp: Cp (pressure coefficient); if you want absolute pressure: p = p0 + Cp*q
+// -----------------------------------------------------------------------------
+function computeSurfacePV({
+  angleDeg,
+  velocity,
+  xcval,
+  ycval,
+  rval,
+  gamval,
+  nptc = 37,
+}) {
+  const convdr = Math.PI / 180;
+  const plv = new Array(nptc + 1).fill(0);
+  const plp = new Array(nptc + 1).fill(0);
+
+  for (let index = 1; index <= nptc; index++) {
+    const thet = ((index - 1) * 360) / (nptc - 1);
+
+    // --- cylinder plane velocity (non-dimensional, V∞=1) ---
+    const rad = rval;
+    const thrad = convdr * thet;
+    const alfrad = convdr * angleDeg;
+
+    const ur = Math.cos(thrad - alfrad) * (1.0 - (rval * rval) / (rad * rad));
+    const uth =
+      -Math.sin(thrad - alfrad) * (1.0 + (rval * rval) / (rad * rad)) -
+      gamval / rad;
+
+    const usq = ur * ur + uth * uth;
+
+    // --- translate to generate airfoil & apply Joukowski Jacobian ---
+    let xloc = rad * Math.cos(thrad) + xcval;
+    let yloc = rad * Math.sin(thrad) + ycval;
+
+    const rad2 = Math.sqrt(xloc * xloc + yloc * yloc);
+    const thrad2 = Math.atan2(yloc, xloc);
+
+    let jake1 = 1.0 - Math.cos(2.0 * thrad2) / (rad2 * rad2);
+    let jake2 = Math.sin(2.0 * thrad2) / (rad2 * rad2);
+    let jakesq = jake1 * jake1 + jake2 * jake2;
+
+    // protection (legacy)
+    if (Math.abs(jakesq) <= 0.01) jakesq = 0.01;
+
+    const vsq = usq / jakesq;
+    const velRatio = Math.sqrt(Math.max(0, vsq)); // V/V∞
+    const cp = 1.0 - vsq; // Cp = (p - p∞)/q∞
+
+    plv[index] = velRatio * velocity;
+    plp[index] = cp;
   }
-  return { xm, ym, plp, plv };
+
+  return { plv, plp };
 }
 
 export function computeOutputs(state) {
@@ -171,22 +215,10 @@ export function computeOutputs(state) {
     ycval,
     rval,
   } = generateJoukowskiAirfoilLoop({
-    angleDeg: -angleDeg,
+    angleDeg, // ✅ was -angleDeg
     camberPct,
     thicknessPct,
     nptc: 37,
-  });
-  // We create arrays of size 38 to allow for 1-based indexing (1..37)
-  const plp = Array(38).fill(undefined);
-  const plv = Array(38).fill(undefined);
-  // We iterate through the loop to populate surface physics data
-  airfoilLoop.forEach((pt, index) => {
-    const i = index + 1; // Convert to 1-based indexing for GeometryPanel
-    if (i <= 37) {
-      // Use Cp (Pressure Coefficient) and Velocity Ratio from the Joukowski math
-      plp[i] = pt.cp ?? 0;
-      plv[i] = pt.vRatio ?? 0;
-    }
   });
 
   // FIX #2: pack xm/ym directly in loop order (prevents interior chord line)
@@ -203,6 +235,32 @@ export function computeOutputs(state) {
     thicknessPct,
     nStream: 15,
     nPoints: 37,
+  });
+  // ---------------------------------------------------------------------------
+  // Surface P/V arrays on the airfoil (legacy-style)
+  // NOTE: plp is Cp (pressure coefficient), plv is surface speed (same units as input velocity).
+  // Arrays are indexed 1..37 (0 unused), matching classic FoilSim tables.
+  // ---------------------------------------------------------------------------
+  const sqrtTerm = Math.sqrt(Math.max(1e-9, rval * rval - ycval * ycval));
+  const leg = xcval - sqrtTerm;
+  const teg = xcval + sqrtTerm;
+
+  // mapped-plane chord used by the classic Joukowski CL↔Gamma relation
+  const lem = leg + 1.0 / leg;
+  const tem = teg + 1.0 / teg;
+  const chrdMapped = tem - lem;
+
+  // circulation in the cylinder plane (dimensionless, V∞=1), consistent with the legacy PV/Cp formulas
+  const gamval = (cl * chrdMapped) / (4.0 * Math.PI);
+
+  const { plv, plp } = computeSurfacePV({
+    angleDeg,
+    velocity,
+    xcval,
+    ycval,
+    rval,
+    gamval,
+    nptc: 37,
   });
 
   const ld = calculateLiftToDrag(lift, drag);
@@ -234,10 +292,11 @@ export function computeOutputs(state) {
     rval,
     xm,
     ym,
-    plp, // ✅ Now returned for GeometryPanel
-    plv, // ✅ Now returned for GeometryPanel
     airfoilLoop,
-    flowField,
+    ...flowField,
+    plv,
+    plp,
+    gamval,
 
     // plots
     plots: {

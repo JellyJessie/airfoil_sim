@@ -473,7 +473,7 @@ export function packXmYmFromLoop(loopPoints, nptc = 37) {
 }
 // Joukowski airfoil geometry (FoilSim / NASA style) - reordered to avoid chord line
 // -----------------------------------------------------------------------------
-export function generateJoukowskiAirfoilLoop({
+/*export function generateJoukowskiAirfoilLoop({
   angleDeg,
   camberPct,
   thicknessPct,
@@ -567,8 +567,70 @@ export function generateJoukowskiAirfoilLoop({
   const loop = [...upperTEtoLE, ...lowerLEtoTE.slice(1, -1)];
 
   return { loop, xcval, ycval, rval };
-}
+}*/
+// src/physics/flowField.js
 
+export function generateJoukowskiAirfoilLoop({
+  angleDeg,
+  camberPct,
+  thicknessPct,
+  nptc = 37,
+}) {
+  const convdr = Math.PI / 180;
+  const ycval = getycVal(camberPct);
+  const rval = getrVal(thicknessPct, camberPct);
+  const xcval = getxcVal(thicknessPct, camberPct);
+  const gamval = getGamVal(angleDeg, thicknessPct, camberPct);
+  const alfval = angleDeg * convdr;
+
+  const raw = [];
+  // Generate a single 0-360 loop to avoid internal segments
+  for (let i = 0; i < nptc; i++) {
+    const thetaDeg = (i * 360) / (nptc - 1);
+    const thrad = thetaDeg * convdr;
+
+    const xg = rval * Math.cos(thrad) + xcval;
+    const yg = rval * Math.sin(thrad) + ycval;
+    const rg = Math.sqrt(xg * xg + yg * yg);
+    const thg = Math.atan2(yg, xg);
+
+    // Physics (P and V)
+    const vt = 2.0 * Math.sin(thrad - alfval) + gamval / (Math.PI * rval);
+    const zeta2 = rg * rg;
+    const termX = 1.0 - Math.cos(2.0 * thg) / zeta2;
+    const termY = Math.sin(2.0 * thg) / zeta2;
+    const complexDeriv = Math.sqrt(termX * termX + termY * termY);
+
+    const vRatio = Math.abs(vt) / Math.max(complexDeriv, 0.01);
+    const cp = 1.0 - vRatio * vRatio;
+
+    // Joukowski Mapping
+    const lxm = (rg + 1.0 / rg) * Math.cos(thg);
+    const lym = (rg - 1.0 / rg) * Math.sin(thg);
+
+    // Rotation
+    const rdm = Math.sqrt(lxm * lxm + lym * lym);
+    const thtm = Math.atan2(lym, lxm);
+    const x = rdm * Math.cos(thtm - alfval);
+    const y = rdm * Math.sin(thtm - alfval);
+
+    raw.push({ x, y, cp, vRatio: vRatio * 100 });
+  }
+
+  // Find the index of the Trailing Edge (furthest right point)
+  let iTE = 0;
+  for (let i = 1; i < raw.length; i++) {
+    if (raw[i].x > raw[iTE].x) iTE = i;
+  }
+
+  // Reorder so the array starts and ends at the Trailing Edge
+  const loop = [];
+  for (let i = 0; i < nptc; i++) {
+    loop.push(raw[(iTE + i) % nptc]);
+  }
+
+  return { loop, xcval, ycval, rval };
+}
 export function generateFlowField({
   angleDeg,
   camberPct,
