@@ -157,6 +157,16 @@ export default function FoilSimPanel() {
   const altitude = state.altitude ?? 0;
   const wingArea = state.wingArea ?? 5;
 
+  const handleNumericInput = (key, value) => {
+    // Convert to number, but handle the empty string case to allow clearing the field
+    const numValue = value === "" ? 0 : Number(value);
+    dispatch({
+      type: "SET_INPUT",
+      key: key,
+      value: numValue,
+    });
+  };
+
   // keep wingArea consistent if user edits chord/span:
   // (optional) you can auto-set wingArea = chord * span or something, but I’ll keep it user-controlled.
 
@@ -396,13 +406,10 @@ export default function FoilSimPanel() {
               <input
                 type="number"
                 step="0.5"
-                value={thicknessPct}
+                // Use an empty string if value is 0 to prevent the leading zero bug
+                value={thicknessPct === 0 ? "" : thicknessPct}
                 onChange={(e) =>
-                  dispatch({
-                    type: "SET_INPUT",
-                    key: "thicknessPct",
-                    value: Number(e.target.value),
-                  })
+                  handleNumericInput("thicknessPct", e.target.value)
                 }
                 style={{ width: "100%" }}
               />

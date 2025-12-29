@@ -152,3 +152,97 @@ export function computeAirfoil(state) {
     reynolds: airfoil.getReynolds(),
   };
 }
+
+export function buildVelocityProbePlot({ velocity = 0, units = 1 }) {
+  // units: 1 = imperial, 2 = metric
+  const velUnits = units === 1 ? " mph" : " km/h";
+
+  // Clamp to gauge range [0, 250]
+  const vDisplay = typeof velocity === "number" ? velocity : 0;
+  const vClamped = Math.max(0, Math.min(vDisplay, 250));
+
+  // Map 0–250 speed to 0–180 degrees (semi-circle)
+  // 0 -> 180°, 250 -> 0°
+  const degrees = 180 - (vClamped / 250) * 180;
+  const rad = 0.5;
+  const radians = (degrees * Math.PI) / 180;
+  const x = rad * Math.cos(radians);
+  const y = rad * Math.sin(radians);
+
+  const path = `M -.0 -0.025 L .0 0.025 L ${x} ${y} Z`;
+
+  const data = [
+    {
+      type: "scatter",
+      x: [0],
+      y: [0],
+      marker: { size: 10, color: "850000" },
+      showlegend: false,
+      name: "speed",
+      text: vDisplay,
+      hoverinfo: "text+name",
+    },
+    {
+      values: [50 / 6, 50 / 6, 50 / 6, 50 / 6, 50 / 6, 50 / 6, 50 / 6, 50 / 6],
+      rotation: 90,
+      text: [
+        "181-230",
+        "131-180",
+        "91-130",
+        "51-90",
+        "0-50",
+        "",
+        String(vDisplay) + velUnits,
+        "230-250",
+      ],
+      textinfo: "text",
+      textposition: "inside",
+      marker: {
+        colors: [
+          "rgba(14, 127, 0, .5)",
+          "rgba(110, 154, 22, .5)",
+          "rgba(170, 202, 42, .5)",
+          "rgba(202, 209, 95, .5)",
+          "rgba(210, 206, 145, .5)",
+          "rgba(232, 226, 202, .5)",
+          "rgba(0,0,0,0)",
+          "rgba(15, 128, 0, 0.55)",
+        ],
+      },
+      hoverinfo: "label",
+      hole: 0.5,
+      type: "pie",
+      showlegend: false,
+    },
+  ];
+
+  const layout = {
+    shapes: [
+      {
+        type: "path",
+        path,
+        fillcolor: "850000",
+        line: {
+          color: "850000",
+        },
+      },
+    ],
+    title: "<b>Velocity</b> <br>",
+    height: 400,
+    width: 400,
+    xaxis: {
+      zeroline: false,
+      showticklabels: false,
+      showgrid: false,
+      range: [-1, 1],
+    },
+    yaxis: {
+      zeroline: false,
+      showticklabels: false,
+      showgrid: false,
+      range: [-1, 1],
+    },
+  };
+
+  return { data, layout };
+}

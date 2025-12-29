@@ -3,18 +3,13 @@ import Plot from "react-plotly.js";
 
 import { useFoilSim } from "../store/FoilSimContext.jsx";
 import { computeOutputs } from "./computeOutputs.js";
-
-import { Shape, Airfoil } from "../components/shape.js";
-import { buildVelocityProbePlot } from "../components/foilsimPlots.js";
-
 import GeometryPanel from "../components/GeometryPanel.jsx";
-import GeometryProbeOverlay from "./GeometryProbeOverlay.jsx";
-import makeDataString from "../components/makeDataString.jsx";
 import {
   formatDataReport,
   buildFoilSimCsvRows,
 } from "../physics/plotHelpers.js";
 import OutputTabs from "./OutputTabs.jsx";
+import { buildVelocityProbePlot } from "../components/foilSimCore.js";
 
 // ---- helpers ----
 function pickSeries(obj, candidates, fallback = []) {
@@ -352,20 +347,3 @@ export default function OutputsPanel() {
       return null;
   }
 }
-
-/*
-        <div style={{ display: "grid", gap: 12 }}>
-          <Plot
-            data={data}
-            layout={{ ...layout, margin: { t: 40, l: 50, r: 10, b: 40 } }}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: "100%", height: 420 }}
-          />
-
-          <Plot
-            data={velData}
-            layout={{ ...velLayout, margin: { t: 40, l: 50, r: 10, b: 40 } }}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: "100%", height: 260 }}
-          />
-        </div>*/

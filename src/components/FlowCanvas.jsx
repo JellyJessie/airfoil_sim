@@ -5,49 +5,75 @@ import { useFoilSim } from "../store/FoilSimContext";
 export default function FlowCanvas() {
   const canvasRef = useRef(null);
   const { outputs } = useFoilSim();
+
   const [zoom, setZoom] = useState(1.0);
   const [frame, setFrame] = useState(0);
-  const [displayMode, setDisplayMode] = useState("streamlines");
+  const [displayMode, setDisplayMode] = useState("streamlines"); // streamlines | moving | freeze
 
-  // 1. Extract Streamlines and BodyPoints
+  // ----------------------------
+  // Animation Driver
+  // ----------------------------
+  useEffect(() => {
+    // Only update the frame (motion) if mode is 'moving'
+    if (!outputs || displayMode !== "moving") return;
+
+    const velocity = outputs.velocity ?? 0;
+    if (velocity <= 0) return;
+
+    let delay = 100 - Math.floor((0.227 * velocity) / 0.6818);
+    delay = Math.max(10, Math.min(1000, delay));
+
+    const id = setTimeout(() => setFrame((f) => f + 1), delay);
+    return () => clearTimeout(id);
+  }, [frame, displayMode, outputs?.velocity]);
+
+  // ----------------------------
+  // Data Extraction
+  // ----------------------------
   const streamlines = useMemo(
     () => outputs?.streamlines ?? outputs?.flowField?.streamlines ?? [],
     [outputs]
   );
 
   const bodyPoints = useMemo(() => {
-    if (outputs?.airfoilLoop && outputs.airfoilLoop.length > 0)
+    // Prioritize the continuous loop skin to avoid the "middle line" artifact
+    if (outputs?.airfoilLoop && outputs.airfoilLoop.length > 0) {
       return outputs.airfoilLoop;
+    }
+    // Fallback: Build from xm/ym arrays if necessary
+    const xm = outputs?.xm?.[0] ?? [];
+    const ym = outputs?.ym?.[0] ?? [];
+    if (xm.length >= 37) {
+      const pts = [];
+      const npt2 = 19;
+      for (let i = npt2; i >= 1; i--) pts.push({ x: xm[i], y: ym[i] });
+      for (let i = npt2 + 1; i <= 36; i++) pts.push({ x: xm[i], y: ym[i] });
+      return pts;
+    }
     return [];
   }, [outputs]);
 
-  // 2. Animation Logic
-  useEffect(() => {
-    if (!outputs || displayMode === "freeze") return;
-    const velocity = outputs.velocity ?? 0;
-    if (velocity <= 0) return;
-    let delay = Math.max(
-      10,
-      Math.min(1000, 100 - Math.floor((0.227 * velocity) / 0.6818))
-    );
-    const id = setTimeout(() => setFrame((f) => f + 1), delay);
-    return () => clearTimeout(id);
-  }, [outputs, frame, displayMode]);
-
-  // 3. Drawing Logic
+  // ----------------------------
+  // Main Draw Effect
+  // ----------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     const { width, height } = canvas;
 
-    ctx.clearRect(0, 0, width, height);
+    // 1. Clear Background
     ctx.fillStyle = "black";
     ctx.fillRect(0, 0, width, height);
 
-    if (!bodyPoints.length) return;
+    if (!bodyPoints.length && !streamlines.length) {
+      ctx.fillStyle = "#888";
+      ctx.textAlign = "center";
+      ctx.fillText("No flow data", width / 2, height / 2);
+      return;
+    }
 
-    // Helper to track boundaries
+    // 2. Coordinate Scaling & Bounds
     let b = {
       minX: Infinity,
       maxX: -Infinity,
@@ -70,40 +96,21 @@ export default function FlowCanvas() {
       }
     });
 
-    // Expand bounds for padding
-    const minX = b.minX - 1.2;
-    const maxX = b.maxX + 1.2;
-    const minY = b.minY - 0.9;
-    const maxY = b.maxY + 0.9;
+    // Default bounds if calculation fails
+    if (b.minX === Infinity) b = { minX: -2, maxX: 2, minY: -1, maxY: 1 };
 
-    const spanX = maxX - minX || 1;
-    const spanY = maxY - minY || 1;
-    const scale = Math.min((width - 40) / spanX, (height - 40) / spanY);
+    const spanX = b.maxX - b.minX || 1;
+    const spanY = b.maxY - b.minY || 1;
+    const scale = Math.min((width - 40) / spanX, (height - 40) / spanY) * zoom;
 
     const mapPoint = (p) => ({
-      x: width / 2 + (p.x - (minX + maxX) / 2) * scale * zoom,
-      y: height / 2 - (p.y - (minY + maxY) / 2) * scale * zoom,
+      x: width / 2 + (p.x - (b.minX + b.maxX) / 2) * scale,
+      y: height / 2 - (p.y - (b.minY + b.maxY) / 2) * scale,
     });
 
-    // Draw Airfoil
-    ctx.strokeStyle = "cyan";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    bodyPoints.forEach((p, i) => {
-      const mp = mapPoint(p);
-      if (i === 0) ctx.moveTo(mp.x, mp.y);
-      else ctx.lineTo(mp.x, mp.y);
-    });
-    ctx.closePath();
-    ctx.stroke();
-
-    // Draw Streamlines
-    ctx.lineWidth = 1;
-    ctx.strokeStyle =
-      displayMode === "streamlines"
-        ? "rgba(255, 255, 0, 0.7)"
-        : "rgba(255, 255, 0, 0.2)";
-    streamlines.forEach((line) => {
+    // 3. Helper: Draw Polyline (Streamlines)
+    const drawPolyline = (line) => {
+      if (!line?.length) return;
       ctx.beginPath();
       line.forEach((p, i) => {
         const mp = mapPoint(p);
@@ -111,31 +118,147 @@ export default function FlowCanvas() {
         else ctx.lineTo(mp.x, mp.y);
       });
       ctx.stroke();
-    });
+    };
+
+    // 4. Helper: Draw Moving Red Dashes
+    const drawMovingDashes = (line) => {
+      if (!line?.length) return;
+      const pts = line.map(mapPoint);
+      const dashLen = 8,
+        gapLen = 12,
+        speed = 2.5;
+      const period = dashLen + gapLen;
+      const offset = (frame * speed) % period;
+
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 2;
+
+      // Calculate cumulative distance for dash placement
+      let dist = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const d0 = dist;
+        const segmentLen = Math.hypot(
+          pts[i].x - pts[i - 1].x,
+          pts[i].y - pts[i - 1].y
+        );
+        dist += segmentLen;
+
+        // Draw dashes within this segment
+        for (let j = -offset; j < dist; j += period) {
+          const start = Math.max(d0, j);
+          const end = Math.min(dist, j + dashLen);
+          if (start < end) {
+            const t0 = (start - d0) / segmentLen;
+            const t1 = (end - d0) / segmentLen;
+            ctx.beginPath();
+            ctx.moveTo(
+              pts[i - 1].x + t0 * (pts[i].x - pts[i - 1].x),
+              pts[i - 1].y + t0 * (pts[i].y - pts[i - 1].y)
+            );
+            ctx.lineTo(
+              pts[i - 1].x + t1 * (pts[i].x - pts[i - 1].x),
+              pts[i - 1].y + t1 * (pts[i].y - pts[i - 1].y)
+            );
+            ctx.stroke();
+          }
+        }
+      }
+    };
+
+    // 5. Execution: Draw Flow
+    if (displayMode === "streamlines") {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 255, 0, 0.70)";
+      for (const line of streamlines) drawPolyline(line);
+    } else {
+      // Mode: moving OR freeze
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 255, 0, 0.30)"; // Faint base lines
+      for (const line of streamlines) drawPolyline(line);
+
+      // Draw red dashes for both moving and freeze
+      // In freeze mode, the dashes stay still because 'frame' stops updating
+      if (displayMode === "moving" || displayMode === "freeze") {
+        for (const line of streamlines) drawMovingDashes(line);
+      }
+    }
+
+    // 6. Execution: Draw Airfoil
+    if (bodyPoints.length) {
+      ctx.strokeStyle = "cyan";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      bodyPoints.forEach((p, i) => {
+        const mp = mapPoint(p);
+        if (i === 0) ctx.moveTo(mp.x, mp.y);
+        else ctx.lineTo(mp.x, mp.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    }
   }, [bodyPoints, streamlines, frame, displayMode, zoom]);
 
   return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={() => setDisplayMode("streamlines")}>
+    <div style={{ display: "grid", gap: 10 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          padding: "10px",
+          background: "#222",
+          borderRadius: "4px",
+        }}
+      >
+        <button
+          onClick={() => setDisplayMode("streamlines")}
+          style={{ padding: "4px 12px" }}
+        >
           Streamlines
         </button>
-        <button onClick={() => setDisplayMode("moving")}>Moving</button>
-        <button onClick={() => setDisplayMode("freeze")}>Freeze</button>
-        <input
-          type="range"
-          min="0.5"
-          max="3"
-          step="0.1"
-          value={zoom}
-          onChange={(e) => setZoom(parseFloat(e.target.value))}
-        />
+        <button
+          onClick={() => setDisplayMode("moving")}
+          style={{ padding: "4px 12px" }}
+        >
+          Moving
+        </button>
+        <button
+          onClick={() => setDisplayMode("freeze")}
+          style={{ padding: "4px 12px" }}
+        >
+          Freeze
+        </button>
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            color: "white",
+          }}
+        >
+          <span>Zoom:</span>
+          <input
+            type="range"
+            min="0.5"
+            max="4"
+            step="0.1"
+            value={zoom}
+            onChange={(e) => setZoom(parseFloat(e.target.value))}
+          />
+          <span style={{ minWidth: "35px" }}>{zoom.toFixed(1)}x</span>
+        </div>
       </div>
       <canvas
         ref={canvasRef}
         width={520}
         height={360}
-        style={{ background: "black", width: "100%" }}
+        style={{
+          width: "100%",
+          height: "auto",
+          background: "black",
+          border: "1px solid #444",
+        }}
       />
     </div>
   );
