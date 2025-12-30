@@ -1,11 +1,8 @@
 import React, { useMemo, useRef } from "react";
 import { useFoilSim } from "../store/FoilSimContext.jsx";
 import { computeOutputs } from "../foilsim/computeOutputs";
-import Design3D from "../design/Design3D.jsx"; // we’ll patch it to accept props
-import AnalysisPanel from "./AnalysisPanel.jsx";
+import Design3D from "../design/Design3D.jsx";
 import FlowCanvas from "./FlowCanvas.jsx";
-import OutputTabs from "../foilsim/OutputTabs.jsx";
-import FlightPanel from "../foilsim/FlightPanel.jsx";
 import OutputsPanel from "../foilsim/OutputsPanel.jsx";
 
 // ---------------- NACA 4 helpers (from your DesignApp) ----------------
@@ -366,18 +363,20 @@ export default function FoilSimPanel() {
             }}
           >
             <h3 style={{ margin: "6px 0 0" }}>Design</h3>
-
             <label>
               Chord ({getUnitLabel("length")})
               <input
                 type="number"
                 step="0.01"
-                value={chord}
+                /* FIX: If chord is 0, show an empty string. 
+       This prevents "0" from staying in front when you type.
+    */
+                value={chord === 0 ? "" : chord}
                 onChange={(e) =>
                   dispatch({
                     type: "SET_INPUT",
                     key: "chord",
-                    value: Number(e.target.value),
+                    value: e.target.value === "" ? 0 : Number(e.target.value),
                   })
                 }
                 style={{ width: "100%" }}
@@ -389,62 +388,64 @@ export default function FoilSimPanel() {
               <input
                 type="number"
                 step="0.1"
-                value={span}
+                /* FIX: Same logic for Span */
+                value={span === 0 ? "" : span}
                 onChange={(e) =>
                   dispatch({
                     type: "SET_INPUT",
                     key: "span",
-                    value: Number(e.target.value),
+                    value: e.target.value === "" ? 0 : Number(e.target.value),
                   })
                 }
                 style={{ width: "100%" }}
               />
             </label>
-
             <label>
-              Thickness (%) {/* maps to t = thicknessPct / 100 */}
+              Thickness (%)
               <input
                 type="number"
-                step="0.5"
-                // Use an empty string if value is 0 to prevent the leading zero bug
+                step="0.1"
+                // If thicknessPct is 0, show an empty string so the user can type "0.9" without a leading 0
                 value={thicknessPct === 0 ? "" : thicknessPct}
-                onChange={(e) =>
-                  handleNumericInput("thicknessPct", e.target.value)
-                }
-                style={{ width: "100%" }}
-              />
-            </label>
-
-            <label>
-              Camber (%) {/* maps to m = camberPct / 100 */}
-              <input
-                type="number"
-                step="0.5"
-                value={camberPct}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const val =
+                    e.target.value === "" ? 0 : Number(e.target.value);
                   dispatch({
                     type: "SET_INPUT",
-                    key: "camberPct",
-                    value: Number(e.target.value),
-                  })
-                }
+                    key: "thicknessPct",
+                    value: val,
+                  });
+                }}
                 style={{ width: "100%" }}
               />
             </label>
-
+            {/* --- Camber (%) --- */}
+            <label>
+              Camber (%)
+              <input
+                type="number"
+                step="0.1"
+                value={camberPct === 0 ? "" : camberPct}
+                onChange={(e) => {
+                  const val =
+                    e.target.value === "" ? 0 : Number(e.target.value);
+                  dispatch({ type: "SET_INPUT", key: "camberPct", value: val });
+                }}
+                style={{ width: "100%" }}
+              />
+            </label>
+            {/* --- Camber position (p) --- */}
             <label>
               Camber position (p)
               <input
                 type="number"
                 step="0.05"
-                value={p}
-                onChange={(e) =>
-                  dispatch({
-                    type: "SET_INPUT",
-                    key: "camberPos",
-                    value: Number(e.target.value),
-                  })
-                }
+                value={p === 0 ? "" : p}
+                onChange={(e) => {
+                  const val =
+                    e.target.value === "" ? 0 : Number(e.target.value);
+                  dispatch({ type: "SET_INPUT", key: "camberPos", value: val });
+                }}
                 style={{ width: "100%" }}
               />
             </label>
@@ -456,66 +457,71 @@ export default function FoilSimPanel() {
           >
             <h3 style={{ margin: "10px 0 0" }}>Flight</h3>
             <AngleControl />
+            {/*  <FlightPanel />; */}
             <label>
               Angle of attack (°)
               <input
                 type="number"
                 step="0.5"
-                value={angleDeg}
+                /* If the value is 0, we show "", allowing you to type "0.9" cleanly */
+                value={angleDeg === 0 ? "" : angleDeg}
                 onChange={(e) =>
                   dispatch({
                     type: "SET_INPUT",
                     key: "angleDeg",
-                    value: Number(e.target.value),
+                    /* If the user clears the box, we send 0 to the state */
+                    value: e.target.value === "" ? 0 : Number(e.target.value),
                   })
                 }
                 style={{ width: "100%" }}
               />
             </label>
-            {/*  <FlightPanel />; */}
+
             <label>
-              Velocity({getUnitLabel("velocity")})
+              Velocity ({getUnitLabel("velocity")})
               <input
                 type="number"
                 step="1"
-                value={velocity}
+                value={velocity === 0 ? "" : velocity}
                 onChange={(e) =>
                   dispatch({
                     type: "SET_INPUT",
                     key: "velocity",
-                    value: Number(e.target.value),
+                    value: e.target.value === "" ? 0 : Number(e.target.value),
                   })
                 }
                 style={{ width: "100%" }}
               />
             </label>
+
             <label>
               Altitude ({getUnitLabel("length")})
               <input
                 type="number"
                 step="100"
-                value={altitude}
+                value={altitude === 0 ? "" : altitude}
                 onChange={(e) =>
                   dispatch({
                     type: "SET_INPUT",
                     key: "altitude",
-                    value: Number(e.target.value),
+                    value: e.target.value === "" ? 0 : Number(e.target.value),
                   })
                 }
                 style={{ width: "100%" }}
               />
             </label>
+
             <label>
               Wing area ({getUnitLabel("area")})
               <input
                 type="number"
                 step="0.1"
-                value={wingArea}
+                value={wingArea === 0 ? "" : wingArea}
                 onChange={(e) =>
                   dispatch({
                     type: "SET_INPUT",
                     key: "wingArea",
-                    value: Number(e.target.value),
+                    value: e.target.value === "" ? 0 : Number(e.target.value),
                   })
                 }
                 style={{ width: "100%" }}

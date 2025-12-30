@@ -11,7 +11,7 @@ const initialState = {
   camberPct: 0.02,
   thicknessPct: 12.5,
   velocity: 30,
-  altitude: 0,
+  altitude: 100,
   chord: 1.0,
   span: 4.0,
   wingArea: 4.0,

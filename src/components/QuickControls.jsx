@@ -24,7 +24,6 @@ export default function QuickControls() {
         <button onClick={() => safeCall("dataButton")}>Data</button>
         <button onClick={() => safeCall("plotButton")}>Plot</button>
       </div>
-      <p className="af-note">Calls your existing global functions.</p>
     </div>
   );
 }
