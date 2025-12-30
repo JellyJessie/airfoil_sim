@@ -124,45 +124,29 @@ export default function FlowCanvas() {
     const drawMovingDashes = (line) => {
       if (!line?.length) return;
       const pts = line.map(mapPoint);
-      const dashLen = 8,
-        gapLen = 12,
-        speed = 2.5;
-      const period = dashLen + gapLen;
+
+      const speed = 2.0;
+      const period = 30; // Increased period for longer dashes
       const offset = (frame * speed) % period;
 
       ctx.strokeStyle = "red";
       ctx.lineWidth = 2;
 
-      // Calculate cumulative distance for dash placement
-      let dist = 0;
-      for (let i = 1; i < pts.length; i++) {
-        const d0 = dist;
-        const segmentLen = Math.hypot(
-          pts[i].x - pts[i - 1].x,
-          pts[i].y - pts[i - 1].y
-        );
-        dist += segmentLen;
+      // FIX: Dash size increased (from 5 to 12) for better visibility
+      // [12, 18] means 12px dash and 18px gap
+      ctx.setLineDash([12, 18]);
 
-        // Draw dashes within this segment
-        for (let j = -offset; j < dist; j += period) {
-          const start = Math.max(d0, j);
-          const end = Math.min(dist, j + dashLen);
-          if (start < end) {
-            const t0 = (start - d0) / segmentLen;
-            const t1 = (end - d0) / segmentLen;
-            ctx.beginPath();
-            ctx.moveTo(
-              pts[i - 1].x + t0 * (pts[i].x - pts[i - 1].x),
-              pts[i - 1].y + t0 * (pts[i].y - pts[i - 1].y)
-            );
-            ctx.lineTo(
-              pts[i - 1].x + t1 * (pts[i].x - pts[i - 1].x),
-              pts[i - 1].y + t1 * (pts[i].y - pts[i - 1].y)
-            );
-            ctx.stroke();
-          }
-        }
-      }
+      // FIX: Using negative offset ensures the flow moves from Leading Edge to Trailing Edge
+      ctx.lineDashOffset = -offset;
+
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.stroke();
+
+      ctx.setLineDash([]); // Reset dash state for other drawing operations
     };
 
     // 5. Execution: Draw Flow
