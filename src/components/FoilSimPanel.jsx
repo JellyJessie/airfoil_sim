@@ -4,6 +4,7 @@ import { computeOutputs } from "../foilsim/computeOutputs";
 import Design3D from "../design/Design3D.jsx";
 import FlowCanvas from "./FlowCanvas.jsx";
 import OutputsPanel from "../foilsim/OutputsPanel.jsx";
+import { calculateReynolds } from "../physics/foilPhysics.js";
 
 // ---------------- NACA 4 helpers (from your DesignApp) ----------------
 function deg2rad(d) {
@@ -449,6 +450,48 @@ export default function FoilSimPanel() {
                 style={{ width: "100%" }}
               />
             </label>
+            {/* --- Reynolds Number Result --- */}
+            <div
+              style={{
+                marginTop: "15px",
+                padding: "10px",
+                backgroundColor: "#f0f7ff",
+                borderRadius: "8px",
+                border: "1px solid #b8daff",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "0.85rem",
+                  color: "#495057",
+                  fontWeight: "bold",
+                  marginBottom: "4px",
+                }}
+              >
+                Reynolds Number (Re)
+              </div>
+              <div
+                style={{
+                  fontSize: "1.1rem",
+                  color: "#004085",
+                  fontFamily: "monospace",
+                  fontWeight: "600",
+                }}
+              >
+                {(() => {
+                  // Calling your specific function from computeOutputs
+                  const re = calculateReynolds({
+                    velocity,
+                    altitude,
+                    chord,
+                    densityTrop: 1.225,
+                    densityStrat: 0.3639,
+                  });
+
+                  return re > 0 ? re.toExponential(3) : "0.000e+0";
+                })()}
+              </div>
+            </div>
           </div>
 
           {/* flight box */}
@@ -630,7 +673,6 @@ export default function FoilSimPanel() {
                 y1={-(bbox.maxy + 0.1)}
                 x2={0.25 * chord}
                 y2={-(bbox.miny - 0.1)}
-                stroke="rgba(255,0,0,0.4)"
               />
             </svg>
             <div

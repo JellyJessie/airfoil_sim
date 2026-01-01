@@ -433,45 +433,48 @@ export function calculateDragForce(
 
 // ============================================================================
 // VISCOSITY
-// ============================================================================
-
-// REPLACES: calculateViscosity(mu0, ts0)
 export function calculateViscosity(mu0, ts0) {
-  return ((mu0 * 717.408) / (ts0 + 198.72)) * Math.pow(ts0 / 518.688, 1.5);
+  // mu0: Reference viscosity (Use 1.789e-5 for Metric)
+  // ts0: Current Temperature (Kelvin)
+
+  // Sutherland's Law Constants for Metric
+  const T_ref = 288.15; // Sea level temperature in Kelvin
+  const S_constant = 110.4; // Sutherland constant for air
+
+  // Formula: mu = mu0 * (T / T_ref)^1.5 * (T_ref + S) / (T + S)
+  const viscos =
+    mu0 *
+    Math.pow(ts0 / T_ref, 1.5) *
+    ((T_ref + S_constant) / (ts0 + S_constant));
+
+  return viscos;
 }
 
-// REPLACES: calculateReynolds()
-export function calculateReynolds({
-  velocity,
-  altitude,
-  chord = 5.0,
-  lconv = 1.0,
-  vconv = 0.6818,
-  mu0 = 0.000000362,
-  densityTrop,
-  densityStrat,
-}) {
-  const hite = altitude / lconv;
+// Match professional aerodynamic tables, uses the exact Sutherland's constants and
+// International Standard Atmosphere (ISA) lapse rates
+export function calculateReynolds({ velocity, altitude, chord }) {
+  // 1. ISA Constants.
+  const T0 = 288.15; // Sea level temp (K)
+  const P0 = 101325; // Sea level pressure (Pa)
+  const R = 287.05; // Gas constant for air
+  const mu0 = 1.7894e-5; // Exact ISA dynamic viscosity
+  const S = 110.4; // Sutherland constant
 
-  // Temperature model
-  let ts0;
-  if (hite <= 36152.0) {
-    ts0 = calculateTS0STroposphere(hite);
-  } else {
-    ts0 = calculateTS0Stratosphere();
-  }
+  // 2. Calculate Local Temperature (Troposphere logic)
+  // Lapse rate is 0.0065 K/m up to 11,000m
+  const temperature = T0 - 0.0065 * altitude;
 
-  // Viscosity
-  const viscos = calculateViscosity(mu0, ts0);
+  // 3. Calculate Local Density (Standard Atmosphere Model)
+  // rho = rho0 * (T / T0)^4.256 (for the troposphere)
+  const density = 1.225 * Math.pow(temperature / T0, 4.25588);
 
-  // Reynolds
-  let reynolds = 0;
+  // 4. Calculate Local Viscosity (Sutherland's Law)
+  const viscosity =
+    mu0 * Math.pow(temperature / T0, 1.5) * ((T0 + S) / (temperature + S));
 
-  if (altitude <= 36000) {
-    reynolds = (velocity / vconv) * (chord / lconv) * (densityTrop / viscos);
-  } else {
-    reynolds = (velocity / vconv) * (chord / lconv) * (densityStrat / viscos);
-  }
+  // 5. Final Reynolds Number
+  // Re = (Density * Velocity * Chord) / Viscosity
+  const reynolds = (density * velocity * chord) / viscosity;
 
   return reynolds;
 }

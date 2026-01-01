@@ -35,6 +35,12 @@
 .af-grid button:hover {
   background: #eee;
 }
+/* Force the 2D preview background to white */
+.af-2d-stage,
+.af-2d-stage svg {
+  background: #fff;
+}
+
 .af-field {
   display: flex;
   flex-direction: column;

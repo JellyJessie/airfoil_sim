@@ -120,27 +120,6 @@ export default function Design2D() {
         width="100%"
         height="520"
       >
-        <defs>
-          <pattern
-            id="grid"
-            width="0.1"
-            height="0.1"
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d="M 0 0 L 0 0.1 M 0 0 L 0.1 0"
-              stroke="rgba(0,0,0,0.08)"
-              strokeWidth="0.002"
-            />
-          </pattern>
-        </defs>
-        <rect
-          x={bbox.minx - 0.1}
-          y={-(bbox.maxy + 0.1)}
-          width={bbox.w + 0.2}
-          height={bbox.h + 0.2}
-          fill="url(#grid)"
-        />
         <path
           d={path}
           fill="rgba(0,0,0,0.05)"
@@ -152,14 +131,12 @@ export default function Design2D() {
           y1={-(bbox.maxy + 0.1)}
           x2={0.25 * chord}
           y2={-(bbox.miny - 0.1)}
-          stroke="rgba(255,0,0,0.4)"
         />
         <line
           x1={pFrac * chord}
           y1={-(bbox.maxy + 0.1)}
           x2={pFrac * chord}
           y2={-(bbox.miny - 0.1)}
-          stroke="rgba(0,128,0,0.45)"
         />
       </svg>
     </div>
