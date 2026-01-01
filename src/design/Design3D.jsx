@@ -65,6 +65,8 @@ function naca4({ m, p, t, c = 1, n = 200 }) {
 function buildWingGeometry({
   pts2d,
   span = 2,
+  rootChord = 1,
+
   sections = 24,
   taper = 1,
   twistTipDeg = 0,
@@ -81,7 +83,6 @@ function buildWingGeometry({
   const idx = [];
 
   const n = pts2d.length;
-  const rootChord = 1.0;
   const pivotFrac = 0.25;
 
   const secPts = secYs.map((y, si) => {
@@ -131,16 +132,33 @@ function buildWingGeometry({
 
 export default function Design3D({
   angleDeg = 0,
+
+  // Geometry inputs (accept either fraction inputs OR % inputs)
   chord = 1.0,
-  t = 0.12,
-  m = 0.02,
-  p = 0.4,
   span = 2.0,
   taper = 1,
   twist = 0,
+
+  // If you already pass these as fractions (0.12 = 12%), they still work.
+  t,
+  m,
+  p,
+
+  // New, UI-friendly percent inputs (optional):
+  thicknessPct = 12.0, // e.g. 12.0 => 12%
+  camberPct = 2.0, // e.g. 2.0  => 2% max camber
+  camberPosPct = 40.0, // e.g. 40.0 => max camber at 40% chord
+
   height = 520,
 }) {
   const mountRef = useRef(null);
+
+  // Normalize inputs:
+  // - t/m/p are the classic NACA4 fractions (t=0.12, m=0.02, p=0.4)
+  // - thicknessPct/camberPct/camberPosPct are % inputs (12, 2, 40)
+  const tFrac = typeof t === "number" ? t : (thicknessPct ?? 12) / 100;
+  const mFrac = typeof m === "number" ? m : (camberPct ?? 2) / 100;
+  const pFrac = typeof p === "number" ? p : (camberPosPct ?? 40) / 100;
 
   // ✅ NEW: store latest AoA without recreating the scene
   const angleRef = useRef(angleDeg);
@@ -148,22 +166,23 @@ export default function Design3D({
     angleRef.current = angleDeg;
   }, [angleDeg]);
 
-  const base2d = useMemo(() => naca4({ m, p, t, c: 1, n: 300 }), [m, p, t]);
-  const scaled2d = useMemo(
-    () => base2d.map(([x, y]) => [x * chord, y * chord]),
-    [base2d, chord]
+  const base2d = useMemo(
+    () => naca4({ m: mFrac, p: pFrac, t: tFrac, c: 1, n: 300 }),
+    [mFrac, pFrac, tFrac]
   );
 
   const geom = useMemo(
     () =>
       buildWingGeometry({
-        pts2d: scaled2d,
+        pts2d: base2d,
+        rootChord: chord,
         span,
         sections: 28,
         taper,
         twistTipDeg: twist,
       }),
-    [scaled2d, span, taper, twist]
+    // Rebuild 3D wing only when underlying 2D section or sizing params change
+    [base2d, chord, span, taper, twist]
   );
 
   useEffect(() => {

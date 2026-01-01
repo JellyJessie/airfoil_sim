@@ -78,11 +78,24 @@ function asPath(pts) {
 
 export default function Design2D() {
   const { state } = useAirfoil();
-  const { chord, t, m, p, angleDeg } = state;
+  const { chord, t, m, p, angleDeg, thicknessPct, camberPct, camberPosPct } =
+    state;
+
+  const tFrac = typeof t === "number" ? t : (thicknessPct ?? 12) / 100;
+  const mFrac = typeof m === "number" ? m : (camberPct ?? 2) / 100;
+  const pFrac = typeof p === "number" ? p : (camberPosPct ?? 40) / 100;
 
   const pts = useMemo(
-    () => naca4({ m, p, t, c: chord, n: 300, alpha: angleDeg }),
-    [m, p, t, chord, angleDeg]
+    () =>
+      naca4({
+        m: mFrac,
+        p: pFrac,
+        t: tFrac,
+        c: chord,
+        n: 300,
+        alpha: angleDeg,
+      }),
+    [mFrac, pFrac, tFrac, chord, angleDeg]
   );
   const path = useMemo(() => asPath(pts), [pts]);
   const bbox = useMemo(() => {
@@ -140,6 +153,13 @@ export default function Design2D() {
           x2={0.25 * chord}
           y2={-(bbox.miny - 0.1)}
           stroke="rgba(255,0,0,0.4)"
+        />
+        <line
+          x1={pFrac * chord}
+          y1={-(bbox.maxy + 0.1)}
+          x2={pFrac * chord}
+          y2={-(bbox.miny - 0.1)}
+          stroke="rgba(0,128,0,0.45)"
         />
       </svg>
     </div>
