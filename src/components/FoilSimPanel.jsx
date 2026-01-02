@@ -301,7 +301,15 @@ export default function FoilSimPanel() {
   const err = results?.__error;
 
   return (
-    <div style={{ padding: 16, maxWidth: 1100 }}>
+    <div
+      style={{
+        padding: 16,
+        width: "100%",
+        maxWidth: 1500, // was 1100
+        margin: "0 auto", // keeps it centered
+        boxSizing: "border-box",
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -347,9 +355,11 @@ export default function FoilSimPanel() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "360px 1fr",
+          // ✅ 2) Make left column wider + keep both columns balanced
+          gridTemplateColumns: "minmax(420px, 1fr) minmax(520px, 1fr)", // was "360px 1fr"
           gap: 16,
           marginTop: 12,
+          alignItems: "start",
         }}
       >
         {/* LEFT: unified controls */}
@@ -437,7 +447,7 @@ export default function FoilSimPanel() {
             </label>
             {/* --- Camber position (p) --- */}
             <label>
-              Camber position (p)
+              Camber position (p between 0 and 1)
               <input
                 type="number"
                 step="0.05"
