@@ -7,6 +7,7 @@ import GeometryPanel from "../components/GeometryPanel.jsx";
 import {
   formatDataReport,
   buildFoilSimCsvRows,
+  airfoilPointsLoopN,
 } from "../physics/plotHelpers.js";
 import OutputTabs from "./OutputTabs.jsx";
 import { buildVelocityProbePlot } from "../components/foilSimCore.js";
@@ -74,23 +75,40 @@ function makeLinePlot({ title, xTitle, yTitle, x, y, infoLabel }) {
   );
 }
 
-function exportText(text) {
+function exportText(text, filename = "foilsim_data.txt") {
   const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
   a.href = url;
-  a.download = "foilsim_data.txt";
+  a.download = filename;
+  document.body.appendChild(a); // helps Safari/Firefox
   a.click();
+  a.remove();
 
   URL.revokeObjectURL(url);
 }
 
 function csvEscape(v) {
-  const s = String(v ?? "");
-  // Quote if it contains comma/quote/newline
-  if (/[,"\n]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
+  if (v == null) return "";
+  const s = String(v);
+  // escape quotes and wrap if needed
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
+}
+
+function downloadCsvText(filename, rows) {
+  const csv = rows.map((r) => r.map(csvEscape).join(",")).join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function downloadCsv(filename, rows) {
@@ -303,6 +321,57 @@ export default function OutputsPanel() {
     case 3: {
       // Data
       const report = formatDataReport(out, state);
+      const exportGeometryPointsCsv = () => {
+        const m = (state.camberPct ?? 0) / 100;
+        const p = (state.camberPosPct ?? 40) / 100;
+        const t = (state.thicknessPct ?? 12) / 100;
+
+        const chord = state.chord ?? 1;
+        const alphaDeg = state.angleDeg ?? 0;
+        const N = state.airfoilPointsN ?? 81;
+
+        const pts = airfoilPointsLoopN({ m, p, t, chord, alphaDeg, N });
+
+        // HARD GUARD: if pts is empty, don't download an empty file
+        if (!pts || pts.length === 0) {
+          console.error("No geometry points generated.", {
+            m,
+            p,
+            t,
+            chord,
+            alphaDeg,
+            N,
+            pts,
+          });
+          alert("No geometry points generated. Check console for details.");
+          return;
+        }
+
+        const rows = [];
+        rows.push(["Geometry Points"]);
+        rows.push(["Generated", new Date().toISOString()]);
+        rows.push(["N", pts.length]);
+        rows.push([
+          "m",
+          m,
+          "p",
+          p,
+          "t",
+          t,
+          "chord",
+          chord,
+          "alphaDeg",
+          alphaDeg,
+        ]);
+        rows.push([]);
+        rows.push(["index", "x", "y", "x/c", "y/c"]);
+
+        pts.forEach(([x, y], i) =>
+          rows.push([i + 1, x, y, x / chord, y / chord])
+        );
+
+        downloadCsvText("airfoil_geometry_points.csv", rows);
+      };
 
       return (
         <div style={{ display: "grid", gap: 12 }}>
@@ -321,8 +390,27 @@ export default function OutputsPanel() {
           >
             {report}
           </pre>
+          <div className="af-field">
+            <label>
+              Airfoil Points (20–200)
+              <input
+                type="number"
+                min={20}
+                max={200}
+                step={1}
+                value={state.airfoilPointsN}
+                onChange={(e) => setAirfoilPointsN(e.target.value)}
+              />
+            </label>
+          </div>
 
-          <button onClick={() => exportText(report)}>Export Data</button>
+          {/*<button onClick={() => exportText(report)}>
+            Export Geometry Data
+          </button> */}
+          <button onClick={exportGeometryPointsCsv}>
+            Export Geometry Data
+          </button>
+
           <button
             onClick={() => {
               const rows = buildFoilSimCsvRows(out, state);

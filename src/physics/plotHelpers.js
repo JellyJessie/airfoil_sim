@@ -66,6 +66,126 @@ export function formatDataReport(out, state) {
   `.trim();
 }
 
+export function airfoilPointsLoopN({
+  m,
+  p,
+  t,
+  chord = 1,
+  alphaDeg = 0,
+  N = 81,
+}) {
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const Nclamped = clamp(Math.round(N), 20, 200);
+
+  // Split N points across surfaces; build a closed loop without duplicating LE.
+  const nUpper = Math.ceil(Nclamped / 2); // includes TE and LE
+  const nLower = Nclamped - nUpper + 1; // includes LE and TE (we'll drop LE duplicate)
+  const nSegUpper = Math.max(1, nUpper - 1);
+  const nSegLower = Math.max(1, nLower - 1);
+
+  const buildSurface = (nSeg) => {
+    const pts = [];
+    for (let i = 0; i <= nSeg; i++) {
+      const x = (chord * i) / nSeg;
+      const xc = x / chord;
+
+      const yt =
+        5 *
+        t *
+        chord *
+        (0.2969 * Math.sqrt(Math.max(xc, 1e-9)) -
+          0.126 * xc -
+          0.3516 * xc ** 2 +
+          0.2843 * xc ** 3 -
+          0.1015 * xc ** 4);
+
+      let yc = 0;
+      let dyc = 0;
+      if (p > 0 && m !== 0) {
+        if (xc < p) {
+          yc = (m * chord * (2 * p * xc - xc * xc)) / (p * p);
+          dyc = (2 * m * (p - xc)) / (p * p);
+        } else {
+          yc =
+            (m * chord * (1 - 2 * p + 2 * p * xc - xc * xc)) /
+            ((1 - p) * (1 - p));
+          dyc = (2 * m * (p - xc)) / ((1 - p) * (1 - p));
+        }
+      }
+
+      pts.push({ x, yc, yt, theta: Math.atan(dyc) });
+    }
+    return pts;
+  };
+
+  const upBase = buildSurface(nSegUpper);
+  const loBase = buildSurface(nSegLower);
+
+  // Rotate about quarter-chord to match your preview convention
+  const a = (alphaDeg * Math.PI) / 180;
+  const s = Math.sin(a),
+    c = Math.cos(a);
+  const pivotX = 0.25 * chord,
+    pivotY = 0;
+  const rot = (X, Y) => {
+    const xr = X - pivotX,
+      yr = Y - pivotY;
+    return [xr * c - yr * s + pivotX, xr * s + yr * c + pivotY];
+  };
+
+  const upper = upBase.map(({ x, yc, yt, theta }) => {
+    const xu = x - yt * Math.sin(theta);
+    const yu = yc + yt * Math.cos(theta);
+    return rot(xu, yu);
+  });
+
+  const lower = loBase.map(({ x, yc, yt, theta }) => {
+    const xl = x + yt * Math.sin(theta);
+    const yl = yc - yt * Math.cos(theta);
+    return rot(xl, yl);
+  });
+
+  // Loop order: TE->LE on upper, then LE->TE on lower (skip duplicate LE)
+  const loop = [...upper].reverse().concat(lower.slice(1));
+  return loop.slice(0, Nclamped);
+}
+
+function pickAirfoilParamsFromState(state) {
+  const chord = Number.isFinite(state?.chord) ? state.chord : 1;
+  const alphaDeg = Number.isFinite(state?.alphaDeg)
+    ? state.alphaDeg
+    : Number.isFinite(state?.alpha)
+      ? state.alpha
+      : 0;
+
+  // Support either fraction inputs (m,p,t) or percent inputs (camberPct, etc.)
+  const m = Number.isFinite(state?.m)
+    ? state.m
+    : Number.isFinite(state?.camberPct)
+      ? state.camberPct / 100
+      : 0;
+
+  const p = Number.isFinite(state?.p)
+    ? state.p
+    : Number.isFinite(state?.camberPosPct)
+      ? state.camberPosPct / 100
+      : 0;
+
+  const t = Number.isFinite(state?.t)
+    ? state.t
+    : Number.isFinite(state?.thicknessPct)
+      ? state.thicknessPct / 100
+      : 0.12;
+
+  const N = Number.isFinite(state?.numPoints)
+    ? state.numPoints
+    : Number.isFinite(state?.airfoilPointsN)
+      ? state.airfoilPointsN
+      : 81;
+
+  return { m, p, t, chord, alphaDeg, N };
+}
+
 export function buildFoilSimCsvRows(out, state) {
   const rows = [];
 
@@ -92,33 +212,21 @@ export function buildFoilSimCsvRows(out, state) {
   // ---- Cp TABLE ----
   rows.push([""]); // blank
   rows.push(["Cp Table"]);
-  rows.push([
-    "Surface",
-    "i",
-    "X/C",
-    "Y/C",
-    "Cp",
-    "Vratio", // Vlocal/V∞ if you’re using plv as ratio
-  ]);
+  rows.push(["Surface", "i", "X/C", "Y/C", "Cp", "Vratio"]);
 
   const xm = out?.xm;
   const ym = out?.ym;
   const plp = out?.plp; // Cp
   const plv = out?.plv; // Vratio
 
-  // Guard
+  // Guard (keep what you had)
   if (!xm || !ym || !plp) return rows;
 
-  // Legacy-like normalization (matches your GeometryPanel style)
-  // NASA used mapfact=4 for airfoil/ellipse/plate; 2 for cylinder/ball
   const shapeSelect = state.shapeSelect ?? 1;
   const mapfact = shapeSelect < 4 ? 4.0 : 2.0;
 
-  // Legacy indices: nptc=37, npt2=19
-  const nptc = 37;
   const npt2 = 19;
 
-  // Upper surface rows: (npt2 - 0) ... (npt2 - 18)
   for (let k = 0; k <= 18; k++) {
     const i = npt2 - k;
     rows.push([
@@ -131,7 +239,6 @@ export function buildFoilSimCsvRows(out, state) {
     ]);
   }
 
-  // Lower surface rows: (npt2 + 0) ... (npt2 + 18)
   for (let k = 0; k <= 18; k++) {
     const i = npt2 + k;
     rows.push([
@@ -142,6 +249,25 @@ export function buildFoilSimCsvRows(out, state) {
       Number.isFinite(plp?.[i]) ? plp[i] : "",
       Number.isFinite(plv?.[i]) ? plv[i] : "",
     ]);
+  }
+
+  // ---- GEOMETRY POINTS (user-defined N: 20..200) ----
+  rows.push([""]);
+  rows.push(["Geometry Points (Airfoil Loop)"]);
+
+  const { m, p, t, chord, alphaDeg, N } = pickAirfoilParamsFromState(state);
+  const pts = airfoilPointsLoopN({ m, p, t, chord, alphaDeg, N });
+
+  rows.push(["Requested N", N]);
+  rows.push(["m (camber)", m, "p (camber pos)", p, "t (thickness)", t]);
+  rows.push(["chord", chord, "alphaDeg", alphaDeg]);
+
+  rows.push([""]);
+  rows.push(["index", "x", "y", "x/c", "y/c"]);
+
+  for (let i = 0; i < pts.length; i++) {
+    const [x, y] = pts[i];
+    rows.push([i + 1, x, y, x / chord, y / chord]);
   }
 
   return rows;

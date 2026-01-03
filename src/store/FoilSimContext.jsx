@@ -22,6 +22,8 @@ const initialState = {
   inputButton: 2, // if you still care about Shape/Flight/Analysis/etc
   selectClicked: 0,
   shapeSelect: 1, // 1=Joukowski, 2=Ellipse, 3=Plate, 4=Cylinder, 5=Ball etc.
+  airfoilPointsN: 81, // user-controlled, 20..200
+  camberPosPct: 40, // (optional, if you’re adding camber position globally too)
 
   options: {
     aspectRatioCorrection: true,
@@ -85,6 +87,15 @@ function foilSimReducer(state, action) {
 
     case "SET_ENVIRONMENT":
       return { ...state, environment: action.environment };
+    case "SET_AIRFOIL_POINTS_N": {
+      const n = Math.max(20, Math.min(200, Math.round(action.value)));
+      return { ...state, airfoilPointsN: n };
+    }
+
+    case "SET_CAMBER_POS_PCT": {
+      const p = Math.max(0, Math.min(100, Number(action.value)));
+      return { ...state, camberPosPct: p };
+    }
 
     case "SET_UNITS": {
       const nextUnits = action.units; // "imperial" | "metric"
@@ -228,7 +239,10 @@ export function FoilSimProvider({ children }) {
     dispatch({ type: "SET_OUTPUT_BUTTON", value });
   const incrementSelectClicked = () =>
     dispatch({ type: "INCREMENT_SELECT_CLICKED" });
-
+  const setAirfoilPointsN = (value) =>
+    dispatch({ type: "SET_AIRFOIL_POINTS_N", value });
+  const setCamberPosPct = (value) =>
+    dispatch({ type: "SET_CAMBER_POS_PCT", value });
   const setEnvironment = (environment) =>
     dispatch({ type: "SET_ENVIRONMENT", environment });
 
@@ -293,6 +307,8 @@ export function FoilSimProvider({ children }) {
     setInputButton,
     setOutputButton,
     incrementSelectClicked,
+    setAirfoilPointsN,
+    setCamberPosPct,
   };
 
   return (
