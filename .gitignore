@@ -1,6 +1,4 @@
-index.html
-package.json
-package-lock.json
-vite.config
-airfoil_sim.code-workspace
-README.md
+node_modules/
+.cache/
+dist/
+.DS_Store
