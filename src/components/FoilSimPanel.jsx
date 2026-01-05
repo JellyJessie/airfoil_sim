@@ -5,6 +5,7 @@ import Design3D from "../design/Design3D.jsx";
 import FlowCanvas from "./FlowCanvas.jsx";
 import OutputsPanel from "../foilsim/OutputsPanel.jsx";
 import { calculateReynolds } from "../physics/foilPhysics.js";
+import logo from "../assets/logo.png";
 
 // ---------------- NACA 4 helpers (from your DesignApp) ----------------
 function deg2rad(d) {
@@ -58,7 +59,7 @@ function naca4({ m, p, t, c = 1, n = 200, alpha = 0 }) {
     return (2 * m * (p - xc)) / ((1 - p) * (1 - p));
   });
 
-  const a = deg2rad(alpha);
+  const a = deg2rad(-alpha);
   const pivot = [0.25 * c, 0];
 
   const upper = [];
@@ -318,7 +319,16 @@ export default function FoilSimPanel() {
           gap: 12,
         }}
       >
-        <h2 style={{ margin: 0 }}>Airfoil Design & Simulation</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {/* --- ADD YOUR LOGO HERE --- */}
+          <img
+            src={logo}
+            alt="Logo"
+            style={{ width: "80px", height: "80px", objectFit: "contain" }}
+          />
+
+          <h2 style={{ margin: 0 }}>Airfoil Design & Simulation</h2>
+        </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button

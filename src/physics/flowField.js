@@ -220,7 +220,7 @@ export function generateAirfoilGeometry({
   camberPct,
   thicknessPct,
   n = 80,
-  angleDeg = -angleDeg,
+  angleDeg = angleDeg,
 }) {
   const m = (camberPct ?? 0) / 100;
   const t = (thicknessPct ?? 0) / 100;

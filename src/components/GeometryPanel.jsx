@@ -26,8 +26,8 @@ export default function GeometryPanel() {
   // If computeOutputs hasn’t produced these yet, show a friendly hint
   const xm = outputs?.xm ?? [];
   const ym = outputs?.ym ?? [];
-  const plp = outputs?.plp ?? []; // pressure (or Cp/converted P depending on your computeOutputs)
-  const plv = outputs?.plv ?? []; // velocity (or V/V∞ depending on your computeOutputs)
+  const plp = outputs?.plp ?? []; // pressure (or Cp/converted P depending on computeOutputs)
+  const plv = outputs?.plv ?? []; // velocity (or V/V∞ depending on computeOutputs)
 
   // Legacy FoilSim indexing constants
   const nptc = 37;

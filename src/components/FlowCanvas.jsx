@@ -6,9 +6,9 @@ export default function FlowCanvas() {
   const canvasRef = useRef(null);
   const { outputs } = useFoilSim();
 
-  const [zoom, setZoom] = useState(1.0);
+  const [zoom, setZoom] = useState(2.0);
   const [frame, setFrame] = useState(0);
-  const [displayMode, setDisplayMode] = useState("streamlines"); // streamlines | moving | freeze
+  const [displayMode, setDisplayMode] = useState("moving"); // streamlines | moving | freeze
 
   // ----------------------------
   // Animation Driver

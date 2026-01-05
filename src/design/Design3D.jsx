@@ -255,7 +255,7 @@ export default function Design3D({
 
       // ✅ NEW: AoA “pitch” in XY plane = rotate about Z axis
       // Use + or - depending on your sign convention
-      mesh.rotation.z = deg2rad(angleRef.current);
+      mesh.rotation.z = deg2rad(-angleRef.current);
 
       controls.update();
       renderer.render(scene, camera);

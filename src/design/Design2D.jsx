@@ -47,8 +47,15 @@ function naca4Surfaces({ m, p, t, c = 1, n = 200, alpha = 0 }) {
     return (2 * m * (p - xc)) / ((1 - p) * (1 - p));
   });
 
-  const a = deg2rad(alpha);
+  const a = deg2rad(-alpha);
   const pivot = [0.25 * c, 0];
+  console.log(
+    "Design2D LOADED",
+    new Date().toISOString(),
+    "angleDeg =",
+    state.angleDeg
+  );
+  alert("✅ Design2D module loaded");
 
   const upper = [];
   const lower = [];

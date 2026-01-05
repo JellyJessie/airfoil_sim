@@ -215,7 +215,7 @@ export function computeOutputs(state) {
     ycval,
     rval,
   } = generateJoukowskiAirfoilLoop({
-    angleDeg: -angleDeg,
+    angleDeg: angleDeg,
     camberPct,
     thicknessPct,
     nptc: 37,
@@ -254,7 +254,7 @@ export function computeOutputs(state) {
   const gamval = (cl * chrdMapped) / (4.0 * Math.PI);
 
   const { plv, plp } = computeSurfacePV({
-    angleDeg: -angleDeg,
+    angleDeg: angleDeg,
     velocity,
     xcval,
     ycval,
